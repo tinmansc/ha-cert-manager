@@ -2,6 +2,14 @@
 
 [![Release](https://img.shields.io/github/v/release/tinmansc/ha-cert-manager)](https://github.com/tinmansc/ha-cert-manager/releases)
 
+## Origin Story
+
+This project was developed because the author refused to let a printer, which was working perfectly, have a self-signed certificate.
+
+Things escalated.
+
+---
+
 A Home Assistant add-on that deploys your Let's Encrypt certificate to every device on your network — automatically, from one dashboard.
 
 ## Supported devices
