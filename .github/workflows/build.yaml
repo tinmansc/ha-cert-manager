@@ -1,0 +1,66 @@
+name: Build and Push to GHCR
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ha-cert-manager/**"
+
+jobs:
+  build:
+    name: Build & push multi-arch image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ha-cert-manager/frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd ha-cert-manager/frontend
+          npm ci
+          npm run build
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version from config.yaml
+        id: meta
+        run: |
+          VERSION=$(grep '^version:' ha-cert-manager/config.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version $VERSION"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ha-cert-manager
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/tinmansc/ha-cert-manager:${{ steps.meta.outputs.version }}
+            ghcr.io/tinmansc/ha-cert-manager:latest
+          build-args: |
+            BUILD_FROM=python:3.12-alpine
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,19 @@
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets / local config
+options.json
+.env
+
+# Backups generated at runtime
+config/backups/
+
+# OS
+.DS_Store
+Thumbs.db

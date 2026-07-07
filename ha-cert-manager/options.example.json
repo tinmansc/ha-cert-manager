@@ -1,0 +1,68 @@
+{
+  "devices": [
+    {
+      "id": "truenas",
+      "name": "TrueNAS",
+      "type": "truenas",
+      "enabled": true,
+      "host": "https://truenas.daveclark.email",
+      "api_key": "1-MVLWTv..."
+    },
+    {
+      "id": "brother",
+      "name": "Brother MFC-J4335DW",
+      "type": "brother",
+      "enabled": true,
+      "host": "https://brothermfc.daveclark.email",
+      "password": "your_printer_password",
+      "p12_password": "your_p12_password",
+      "delete_old_certs": true,
+      "verify_tls": true
+    },
+    {
+      "id": "hubitat",
+      "name": "Hubitat (blueberry)",
+      "type": "hubitat",
+      "enabled": true,
+      "host": "https://blueberry.daveclark.email",
+      "username": "Dave",
+      "password": "your_hubitat_password",
+      "hubitat_cli_path": "/config/scripts/hubitat-cli"
+    },
+    {
+      "id": "comware",
+      "name": "HP 1950 Switch",
+      "type": "comware",
+      "enabled": true,
+      "host": "192.168.1.1",
+      "port": 443,
+      "username": "admin",
+      "password": "your_switch_password",
+      "pki_domain": "letsencrypt",
+      "ssl_policy": "letsencrypt_policy",
+      "startup_config_path": "flash:/startup.cfg"
+    },
+    {
+      "id": "omada",
+      "name": "Omada OC200",
+      "type": "omada",
+      "enabled": true,
+      "host": "https://oc200.daveclark.email",
+      "port": 443,
+      "username": "admin",
+      "password": "your_omada_password",
+      "omadac_id": "98b5ff105d214825dc9495e46e1f013f"
+    },
+    {
+      "id": "pfsense",
+      "name": "pfSense",
+      "type": "pfsense",
+      "enabled": true,
+      "host": "https://pfsense.daveclark.email",
+      "port": 443,
+      "username": "admin",
+      "password": "your_pfsense_password",
+      "pfsense_allow_upload": false
+    }
+  ]
+}

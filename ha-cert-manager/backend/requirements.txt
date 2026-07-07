@@ -1,0 +1,9 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.2.2
+cryptography==42.0.8
+paramiko==3.4.0
+pyyaml==6.0.2
+pexpect==4.9.0
