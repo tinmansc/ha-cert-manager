@@ -40,7 +40,7 @@ Run through this before every version bump and push to main.
 - [ ] Add-on starts and shows **Running** (green dot)
 - [ ] "Open Web UI" loads the dashboard
 
-## 8. Deploy to production HA (homeassistant.daveclark.email)
+## 8. Deploy to production HA
 - [ ] Run `deploy.ps1` if backend or frontend changed
 - [ ] In HA: Settings → Apps → Cert Manager → ⋮ → **Rebuild** (not Restart)
 - [ ] Add-on restarts and shows Running
