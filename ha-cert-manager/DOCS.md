@@ -11,7 +11,7 @@ After installing the add-on, configure these controls before hitting Start:
 | **Start on boot** | On | Add-on starts automatically when HA restarts |
 | **Watchdog** | On | HA restarts the add-on if it crashes |
 | **Auto update** | On | Picks up new device support and bug fixes |
-| **Show in sidebar** | **On** | Adds Cert Manager to the HA sidebar for one-click access |
+| **Show in sidebar** | **--> On <--** | Adds Cert Manager to the HA sidebar for one-click access |
 
 > **Show in sidebar is off by default.** Make sure to toggle it on — otherwise you won't have a shortcut to the dashboard.
 
