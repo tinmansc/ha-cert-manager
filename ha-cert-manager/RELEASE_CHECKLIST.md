@@ -62,6 +62,13 @@ Run through this before every version bump and push to main.
       backup archive as the data it protects.
 - [ ] Any new write path to `config.json` goes through `crypto_store.save_config()` — never `.write_text()`
       directly — to keep atomic-write + backup-before-overwrite guarantees intact
+- [ ] Any new operation that writes BOTH `master.key` and `config.json` (like rotate/set-key) must call
+      `_check_writable()` first and self-verify (decrypt the result) after — see `rotate_key()` /
+      `set_key()` in `crypto_store.py` for the pattern
+- [ ] If you change `crypto_store.py`'s recovery logic, re-run its scenario test before pushing (not part
+      of CI — run manually): missing `config.json` with a `.bak` present, an orphaned `config.json` with
+      no `master.key`, a simulated interrupted rotation (`.bak` matches the current key but the live file
+      doesn't), and a non-writable config directory. See the CHANGELOG 1.0.12 entry for what each covers.
 
 ---
 
@@ -72,3 +79,4 @@ Run through this before every version bump and push to main.
 > - Forgot to wait for GHCR build before testing update on HA → "image not found" pull error
 > - UI version badge was a hardcoded `APP_VERSION` string in `App.tsx` that drifted 3 releases behind → now reads live from `/api/supervisor/addon-info`
 > - Nearly derived the config encryption key from `SUPERVISOR_TOKEN` for convenience → would have made every stored device credential permanently unrecoverable after any HA backup restore, since that token isn't guaranteed to survive reinstall
+> - `rotate_key()`'s docstring claimed a crash mid-rotation could never leave a mismatched key/config pair — untrue if the ciphertext write succeeded but the key-file write failed (e.g. a Pi's SD card going read-only mid-operation). Fixed in 1.0.12 with a preflight writability check, a post-write self-verify, and automatic recovery from `config.json.bak` if it happens anyway.

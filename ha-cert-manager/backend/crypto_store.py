@@ -14,6 +14,13 @@ per add-on install/start and is not guaranteed to match after a backup
 restore onto a fresh Home Assistant instance. A key that travels in the
 same backup archive as the data it protects is the only kind that
 reliably survives disaster recovery.
+
+This module is also the last line of defense on hardware that's
+genuinely more failure-prone than a proper server — Raspberry Pi SD
+cards corrupt, go read-only, or die outright far more often than a
+RAID array with scheduled backups does. Every write here assumes that
+can happen mid-operation, and tries to leave things recoverable rather
+than silently wrong.
 """
 from __future__ import annotations
 
@@ -72,22 +79,56 @@ def _atomic_write(path: Path, data: bytes) -> None:
     os.replace(tmp, path)
 
 
+def _check_writable() -> None:
+    """Verify the config directory is actually writable before mutating
+    anything in it.
+
+    This is the fix for "what if we can read the key but not write it":
+    a read-only SD card (a common Pi failure mode, not a hypothetical
+    one) would otherwise let a rotation succeed partway — e.g. write the
+    new encrypted config.json but then fail to write the new master.key
+    — leaving the two files permanently out of sync with each other.
+    Checking writability first means a rotation either fully succeeds or
+    touches nothing at all.
+    """
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    probe = CONFIG_DIR / ".write_test.tmp"
+    try:
+        probe.write_bytes(b"probe")
+        probe.unlink()
+    except OSError as exc:
+        raise OSError(f"{CONFIG_DIR} is not writable: {exc}") from exc
+
+
 def generate_key() -> bytes:
     return Fernet.generate_key()
 
 
-def ensure_key() -> bytes:
-    """Return the master key, generating one on first run."""
+def ensure_key(logger: LogFn = None) -> bytes:
+    """Return the master key, generating one on first run.
+
+    If config.json already exists at this point, generating a new key
+    silently would leave that file permanently unreadable — it was
+    encrypted under whatever key used to be here, which is now gone.
+    That's still the only thing we CAN do (there's no key to recover),
+    but it should never happen quietly: log it loudly so "why are my
+    devices gone" has an answer in the event log instead of a mystery.
+    """
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not KEY_FILE.exists():
+        if CONFIG_FILE.exists() and logger:
+            logger("error", "Generating a new encryption key, but an existing config.json was found — "
+                             "it was encrypted under a different key that is now missing and cannot be "
+                             "recovered. If you have a backup of the old master.key, restore it via "
+                             "Settings -> Encryption Key before making any further changes.")
         key = generate_key()
         _atomic_write(KEY_FILE, key)
         return key
     return _read_bytes_verified(KEY_FILE)
 
 
-def encrypt_config(data: bytes, key: Optional[bytes] = None) -> bytes:
-    return Fernet(key or ensure_key()).encrypt(data)
+def encrypt_config(data: bytes, key: Optional[bytes] = None, logger: LogFn = None) -> bytes:
+    return Fernet(key or ensure_key(logger=logger)).encrypt(data)
 
 
 def decrypt_config(token: bytes, key: Optional[bytes] = None, logger: LogFn = None) -> bytes:
@@ -102,7 +143,7 @@ def decrypt_config(token: bytes, key: Optional[bytes] = None, logger: LogFn = No
     fallback makes sense — the caller already knows exactly what key
     they meant to try.
     """
-    active_key = key if key is not None else ensure_key()
+    active_key = key if key is not None else ensure_key(logger=logger)
     try:
         return Fernet(active_key).decrypt(token)
     except InvalidToken:
@@ -122,6 +163,15 @@ def decrypt_config(token: bytes, key: Optional[bytes] = None, logger: LogFn = No
             ) from exc
 
 
+def _parse_or_decrypt(raw: bytes, logger: LogFn = None) -> dict:
+    """Shared plaintext-or-encrypted parsing used for both config.json and
+    config.json.bak, so the backup gets exactly the same handling as the
+    live file rather than a second, slightly-different code path."""
+    if raw[:1] == b"{":
+        return json.loads(raw)
+    return json.loads(decrypt_config(raw, logger=logger))
+
+
 def load_config(logger: LogFn = None) -> dict:
     """Load and decrypt the config file. Returns {} if none exists yet.
 
@@ -129,26 +179,64 @@ def load_config(logger: LogFn = None) -> dict:
     versions before whole-file encryption shipped) into the new encrypted
     format on first read after upgrade — existing installs keep working
     without any manual step.
+
+    Self-heals from config.json.bak in two situations, both logged loudly
+    rather than silently:
+      - config.json is missing entirely, but a backup exists (accidental
+        deletion, a corrupted write that never got finished).
+      - config.json exists but won't decrypt with the current key, while
+        the backup does — this is the signature of an interrupted key
+        rotation (new ciphertext written, new key write failed partway).
     """
     if not CONFIG_FILE.exists():
+        if CONFIG_BACKUP.exists():
+            if logger:
+                logger("warning", "config.json is missing but config.json.bak exists — "
+                                   "attempting to recover from the backup")
+            try:
+                data = _parse_or_decrypt(CONFIG_BACKUP.read_bytes(), logger)
+            except DecryptionError as exc:
+                raise DecryptionError(
+                    "config.json is missing and config.json.bak could not be decrypted either "
+                    "— no automatic recovery is possible"
+                ) from exc
+            save_config(data, logger=logger)
+            if logger:
+                logger("info", "Recovered config.json from config.json.bak")
+            return data
         return {}
+
     raw = CONFIG_FILE.read_bytes()
-    # Plaintext configs are JSON objects starting with '{'. Fernet tokens are
-    # urlsafe-base64 and can never start with that byte — cheap, reliable test.
     if raw[:1] == b"{":
         data = json.loads(raw)
         if logger:
             logger("info", "Migrating plaintext config.json to encrypted storage")
         save_config(data, logger=logger)
         return data
-    plaintext = decrypt_config(raw, logger=logger)
-    return json.loads(plaintext)
+
+    try:
+        return json.loads(decrypt_config(raw, logger=logger))
+    except DecryptionError:
+        if CONFIG_BACKUP.exists():
+            try:
+                backup_raw = CONFIG_BACKUP.read_bytes()
+                if backup_raw[:1] != b"{":
+                    data = json.loads(decrypt_config(backup_raw, logger=logger))
+                    if logger:
+                        logger("warning", "config.json did not match the current key, but "
+                                           "config.json.bak did — likely an interrupted key "
+                                           "rotation. Restoring from the backup automatically.")
+                    save_config(data, logger=logger)
+                    return data
+            except DecryptionError:
+                pass
+        raise
 
 
 def save_config(data: dict, logger: LogFn = None) -> None:
     """Encrypt and atomically write the config file, keeping a one-deep backup."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    token = encrypt_config(json.dumps(data, indent=2).encode())
+    token = encrypt_config(json.dumps(data, indent=2).encode(), logger=logger)
     if CONFIG_FILE.exists():
         _atomic_write(CONFIG_BACKUP, CONFIG_FILE.read_bytes())
     _atomic_write(CONFIG_FILE, token)
@@ -157,13 +245,13 @@ def save_config(data: dict, logger: LogFn = None) -> None:
 def rotate_key(logger: LogFn = None) -> None:
     """Generate a brand-new random key and re-encrypt the existing config under it.
 
-    Safe — no data is lost, and there is nothing for a human to type or
-    paste, so there's no typo risk to guard against here. The new
-    ciphertext is written to disk before the new key file replaces the
-    old one, so a crash mid-rotation still leaves a consistent
-    (old-key, old-ciphertext) or (new-key, new-ciphertext) pair, never a
-    mismatched combination.
+    No data is lost as long as the writes succeed — and now we check
+    that up front (_check_writable) and prove it after the fact (the
+    verify step below) instead of just hoping. There is nothing for a
+    human to type or paste here, so there's no typo risk to guard
+    against, unlike Restore/Set Key.
     """
+    _check_writable()
     data = load_config(logger=logger)
     new_key = generate_key()
     token = Fernet(new_key).encrypt(json.dumps(data, indent=2).encode())
@@ -171,6 +259,23 @@ def rotate_key(logger: LogFn = None) -> None:
         _atomic_write(CONFIG_BACKUP, CONFIG_FILE.read_bytes())
     _atomic_write(CONFIG_FILE, token)
     _atomic_write(KEY_FILE, new_key)
+
+    # Self-verify: prove the round trip actually works before reporting
+    # success, rather than assuming both writes landed correctly. This is
+    # an internal write-consistency check, not "wrong key" — a plain
+    # RuntimeError so callers don't mistake it for the retry-with-force
+    # case that DecryptionError normally signals.
+    try:
+        verify_raw = CONFIG_FILE.read_bytes()
+        verify_key = _read_bytes_verified(KEY_FILE)
+        Fernet(verify_key).decrypt(verify_raw)
+    except InvalidToken as exc:
+        raise RuntimeError(
+            "Key rotation wrote new files but they don't verify against each other — "
+            "this should not happen given the writability check above. "
+            "config.json.bak still holds the pre-rotation data under the OLD key."
+        ) from exc
+
     if logger:
         logger("info", "Encryption key rotated — all stored credentials re-encrypted")
 
@@ -196,6 +301,8 @@ def set_key(new_key_str: str, force: bool = False, logger: LogFn = None) -> dict
     except Exception as exc:
         raise ValueError("Not a valid encryption key") from exc
 
+    _check_writable()
+
     recovered: dict = {}
     if CONFIG_FILE.exists():
         raw = CONFIG_FILE.read_bytes()
@@ -212,4 +319,17 @@ def set_key(new_key_str: str, force: bool = False, logger: LogFn = None) -> dict
 
     _atomic_write(KEY_FILE, new_key)
     save_config(recovered, logger=logger)
+
+    # Self-verify, same as rotate_key — a write-consistency check, not a
+    # "wrong key" signal, hence RuntimeError rather than DecryptionError.
+    try:
+        verify_raw = CONFIG_FILE.read_bytes()
+        verify_key = _read_bytes_verified(KEY_FILE)
+        Fernet(verify_key).decrypt(verify_raw)
+    except InvalidToken as exc:
+        raise RuntimeError(
+            "The new key was saved but config.json doesn't verify against it — this should not "
+            "happen given the writability check above."
+        ) from exc
+
     return recovered

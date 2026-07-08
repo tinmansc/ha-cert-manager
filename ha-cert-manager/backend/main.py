@@ -162,7 +162,7 @@ def get_key():
     boundary as every other endpoint here — see DOCS.md for the security
     model.
     """
-    return {"key": crypto_store.ensure_key().decode()}
+    return {"key": crypto_store.ensure_key(logger=_emit).decode()}
 
 
 @app.post("/api/security/rotate-key")
@@ -170,7 +170,7 @@ def rotate_key():
     """Generate a new random key and re-encrypt existing config under it. Safe — no data loss."""
     try:
         crypto_store.rotate_key(logger=_emit)
-        return {"ok": True, "key": crypto_store.ensure_key().decode()}
+        return {"ok": True, "key": crypto_store.ensure_key(logger=_emit).decode()}
     except Exception as e:
         raise HTTPException(500, f"Key rotation failed: {e}")
 
@@ -192,6 +192,8 @@ def set_key(body: dict):
                                   "Retry with force=true to accept permanent data loss.")
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Failed to set key: {e}")
 
 
 @app.post("/api/notify")

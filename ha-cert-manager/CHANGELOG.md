@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.0.12] — 2026-07-08
+
+### Added
+- **Standalone disaster-recovery script** — `scripts/decrypt_config.py` decrypts `config.json` using `master.key` without the app (or any other file in this repo) needing to run. Bundled into the Docker image alongside the other helper scripts. Handles both the current encrypted format and old pre-1.0.10 plaintext configs, and points at `config.json.bak` if the given key doesn't match.
+- **DOCS.md — "Encrypted device configuration" section** documenting the three files under `/config/ha_cert_manager/`, why Home Assistant's own Backups feature is the only real protection against losing all of them at once (especially relevant on Pi/SD-card hardware, not just a well-backed-up server), and the manual recovery steps.
+- **Self-healing config recovery** — `load_config()` now recovers automatically, with a loud log entry, in two situations instead of failing outright:
+  - `config.json` is missing but `config.json.bak` exists (accidental deletion, an interrupted write) — restores from the backup and re-saves it as the live file.
+  - `config.json` exists but won't decrypt with the current key, while `config.json.bak` does — the signature of an interrupted key rotation (new ciphertext written, new key file write failed partway) — restores from the backup automatically.
+- **Orphaned-key detection** — generating a new encryption key when `config.json` already exists (i.e. the original key went missing separately from the data it protects) now logs a loud, specific error explaining that the existing configuration is unreadable and unrecoverable without a backup of the old key, instead of silently minting a replacement and leaving the mismatch to surface later as a generic decryption failure.
+- **Preflight writability check** before key rotation or a manual key change touches anything — probes that `/config/ha_cert_manager/` is actually writable first. A read-only SD card (a real Pi failure mode) now fails cleanly upfront with nothing mutated, rather than potentially writing new ciphertext and then failing to write the matching new key, which would leave the two permanently out of sync.
+- **Self-verification after key rotation / key changes** — before reporting success, both operations now actually decrypt the freshly-written `config.json` with the freshly-written key to prove the round trip works, instead of just assuming both writes landed correctly.
+
+### Fixed
+- **Inaccurate claim in `rotate_key()`'s docstring** — it asserted a crash mid-rotation could "never leave a mismatched combination," which wasn't true (a mismatch was possible if the ciphertext write succeeded but the key-file write failed). The preflight check and self-verification above close this gap for real instead of just describing it away.
+
+---
+
 ## [1.0.11] — 2026-07-08
 
 ### Fixed
