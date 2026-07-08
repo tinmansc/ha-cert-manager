@@ -107,8 +107,45 @@ const CERT_FAIL_NOTIFY_THRESHOLD = 3;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Shared "did something" feedback color — every button that confirms an
+// action flashes this same green, matching the Refresh Local Cert Info
+// button, so the whole app speaks one visual language for "it worked."
+const FLASH_GREEN = "border-[#39d353] bg-[#39d353]/20 text-[#39d353]";
+
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+// navigator.clipboard is unavailable in some contexts even over HTTPS —
+// notably inside cross-origin iframes without an explicit permissions
+// policy, which is exactly how Home Assistant embeds add-on ingress UIs.
+// It fails *silently* (the optional-chained call just short-circuits to
+// undefined, no error, no rejection), so callers can't tell the
+// difference between "copied" and "nothing happened" without this
+// fallback and an honest return value.
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through to the legacy method below
+    }
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 function statusColor(s: Device["last_status"]) {
@@ -249,6 +286,8 @@ function EncryptionKeySection() {
   const [copied, setCopied]   = useState(false);
   const [busy, setBusy]       = useState(false);
   const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
+  const [rotateFlash, setRotateFlash] = useState(false);
+  const [setKeyFlash, setSetKeyFlash] = useState(false);
 
   const [showRestore, setShowRestore]           = useState(false);
   const [pasteKey, setPasteKey]                 = useState("");
@@ -260,12 +299,15 @@ function EncryptionKeySection() {
     fetch("./api/security/key").then(r => r.json()).then(d => setKey(d.key)).catch(() => {});
   }, []);
 
-  const copyKey = () => {
+  const copyKey = async () => {
     if (!key) return;
-    navigator.clipboard?.writeText(key).then(() => {
+    const ok = await copyToClipboard(key);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
+    } else {
+      setMsg({ ok: false, text: "Copy failed — reveal the key and select/copy it manually" });
+    }
   };
 
   const rotate = async () => {
@@ -277,7 +319,12 @@ function EncryptionKeySection() {
     try {
       const r = await fetch("./api/security/rotate-key", { method: "POST" });
       const d = await r.json();
-      if (r.ok) { setKey(d.key); setMsg({ ok: true, text: "Key rotated — all credentials re-encrypted." }); }
+      if (r.ok) {
+        setKey(d.key);
+        setMsg({ ok: true, text: "Key rotated — all credentials re-encrypted." });
+        setRotateFlash(true);
+        setTimeout(() => setRotateFlash(false), 900);
+      }
       else setMsg({ ok: false, text: d.detail ?? "Rotation failed" });
     } catch { setMsg({ ok: false, text: "Rotation failed" }); }
     finally { setBusy(false); }
@@ -302,7 +349,9 @@ function EncryptionKeySection() {
         setMsg({ ok: true, text: force
           ? "Key replaced — previous credentials are unrecoverable, config reset to empty."
           : `Key restored — ${d.devices} device(s) recovered.` });
-        resetRestoreForm();
+        setSetKeyFlash(true);
+        // Let the green flash actually register before the form collapses.
+        setTimeout(() => { setSetKeyFlash(false); resetRestoreForm(); }, 700);
       } else if (r.status === 409 && !force) {
         // Pasted key doesn't decrypt the existing file — this is now the
         // destructive path. Require the typed confirmation before retrying.
@@ -343,14 +392,18 @@ function EncryptionKeySection() {
           {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
         </button>
         <button onClick={copyKey} title="Copy to clipboard" disabled={!key}
-          className="p-2 rounded border border-[#30363d] text-[#484f58] hover:text-[#8b949e] disabled:opacity-40 shrink-0">
-          {copied ? <CheckCircle2 size={13} className="text-[#39d353]" /> : <Copy size={13} />}
+          className={`p-2 rounded border transition-all duration-500 disabled:opacity-40 shrink-0 ${
+            copied ? FLASH_GREEN : "border-[#30363d] text-[#484f58] hover:text-[#8b949e]"
+          }`}>
+          {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
         </button>
       </div>
 
       <div className="flex gap-2 mb-2">
         <button onClick={rotate} disabled={busy}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border border-[#30363d] font-mono text-[13px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 transition-colors">
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[13px] transition-all duration-500 disabled:opacity-40 ${
+            rotateFlash ? FLASH_GREEN : "border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e]"
+          }`}>
           <RefreshCw size={11} className={busy ? "animate-spin" : ""} /> Rotate
         </button>
         <button onClick={() => setShowRestore(s => !s)} disabled={busy}
@@ -391,13 +444,16 @@ function EncryptionKeySection() {
             <button
               onClick={handleRestoreSubmit}
               disabled={busy || !pasteKey || pasteKey !== pasteKeyConfirm || (needsForce && noRecoveryText !== "NO RECOVERY")}
-              className={`flex-1 py-1.5 rounded border font-mono text-[13px] transition-colors disabled:opacity-40 ${
-                needsForce
-                  ? "border-[#f85149]/60 bg-[#f85149]/20 text-[#f85149] hover:bg-[#f85149]/30"
-                  : "border-[#238636]/60 bg-[#238636]/20 text-[#39d353] hover:bg-[#238636]/30"
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[13px] transition-all duration-500 disabled:opacity-40 ${
+                setKeyFlash
+                  ? FLASH_GREEN
+                  : needsForce
+                    ? "border-[#f85149]/60 bg-[#f85149]/20 text-[#f85149] hover:bg-[#f85149]/30"
+                    : "border-[#238636]/60 bg-[#238636]/20 text-[#39d353] hover:bg-[#238636]/30"
               }`}
             >
-              {needsForce ? "Replace key — data will be lost" : "Set Key"}
+              {setKeyFlash ? <CheckCircle2 size={13} /> : null}
+              {setKeyFlash ? "Saved" : needsForce ? "Replace key — data will be lost" : "Set Key"}
             </button>
             <button onClick={resetRestoreForm}
               className="px-3 py-1.5 rounded border border-[#30363d] font-mono text-[13px] text-[#8b949e] hover:text-[#c9d1d9]">
@@ -420,14 +476,30 @@ function SettingsPanel({
   onClose: () => void;
   bgColor: string; onBgColor: (c: string) => void;
   certPath: string; keyPath: string;
-  onSavePaths: (cert: string, key: string) => void;
+  onSavePaths: (cert: string, key: string) => Promise<boolean>;
   autoDeployOnRenewal: boolean; onAutoDeployToggle: (v: boolean) => void;
-  notifyEnabled: boolean; onNotifyToggle: (v: boolean) => void;
-  pollIntervalMs: number; onPollIntervalChange: (ms: number) => void;
+  notifyEnabled: boolean; onNotifyToggle: (v: boolean) => Promise<boolean>;
+  pollIntervalMs: number; onPollIntervalChange: (ms: number) => Promise<boolean>;
 }) {
   const [localCert, setLocalCert] = useState(certPath);
   const [localKey,  setLocalKey]  = useState(keyPath);
+  const [savingPaths, setSavingPaths]   = useState<"idle" | "ok" | "error">("idle");
+  const [savingPoll, setSavingPoll]     = useState<"idle" | "ok" | "error">("idle");
   const ref = useRef<HTMLDivElement>(null);
+
+  const doSavePaths = async () => {
+    setSavingPaths("idle");
+    const ok = await onSavePaths(localCert, localKey);
+    setSavingPaths(ok ? "ok" : "error");
+    setTimeout(() => setSavingPaths("idle"), ok ? 900 : 2000);
+  };
+
+  const doPollIntervalChange = async (ms: number) => {
+    setSavingPoll("idle");
+    const ok = await onPollIntervalChange(ms);
+    setSavingPoll(ok ? "ok" : "error");
+    setTimeout(() => setSavingPoll("idle"), ok ? 900 : 2000);
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -477,10 +549,15 @@ function SettingsPanel({
           </div>
         </div>
         <button
-          onClick={() => { onSavePaths(localCert, localKey); onClose(); }}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded border border-[#238636]/60 bg-[#238636]/20 font-mono text-[14px] text-[#39d353] hover:bg-[#238636]/30 transition-colors"
+          onClick={doSavePaths}
+          className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[14px] transition-all duration-500 ${
+            savingPaths === "ok" ? FLASH_GREEN
+              : savingPaths === "error" ? "border-[#f85149]/60 bg-[#f85149]/20 text-[#f85149]"
+              : "border-[#238636]/60 bg-[#238636]/20 text-[#39d353] hover:bg-[#238636]/30"
+          }`}
         >
-          <Save size={12} /> Save Paths
+          {savingPaths === "ok" ? <CheckCircle2 size={12} /> : savingPaths === "error" ? <AlertCircle size={12} /> : <Save size={12} />}
+          {savingPaths === "ok" ? "Saved" : savingPaths === "error" ? "Save failed" : "Save Paths"}
         </button>
       </div>
 
@@ -503,13 +580,19 @@ function SettingsPanel({
 
       {/* Polling interval */}
       <div className="px-4 py-3 border-t border-[#21262d]">
-        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2">Polling Interval</p>
+        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center justify-between">
+          <span>Polling Interval</span>
+          {savingPoll === "ok" && <span className="text-[#39d353] normal-case tracking-normal flex items-center gap-1"><CheckCircle2 size={11} /> Saved</span>}
+          {savingPoll === "error" && <span className="text-[#f85149] normal-case tracking-normal flex items-center gap-1"><AlertCircle size={11} /> Save failed</span>}
+        </p>
         <p className="font-mono text-[11px] text-[#484f58] mb-2">
           How often the dashboard re-checks the local cert and device status.
         </p>
         <div className="relative">
-          <select value={pollIntervalMs} onChange={e => onPollIntervalChange(parseInt(e.target.value))}
-            className="w-full appearance-none bg-[#010409] border border-[#30363d] rounded px-3 py-2 font-mono text-[14px] text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] transition-colors pr-8">
+          <select value={pollIntervalMs} onChange={e => doPollIntervalChange(parseInt(e.target.value))}
+            className={`w-full appearance-none bg-[#010409] border rounded px-3 py-2 font-mono text-[14px] text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] transition-all duration-500 pr-8 ${
+              savingPoll === "ok" ? "border-[#39d353]" : savingPoll === "error" ? "border-[#f85149]" : "border-[#30363d]"
+            }`}>
             {POLL_INTERVALS.map(p => (
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
@@ -963,6 +1046,8 @@ export default function App() {
 
   // Refresh button flash
   const [certFlash, setCertFlash] = useState(false);
+  // Pulses on every poll tick (success or failure) so "polling" isn't just a static label
+  const [pollTickFlash, setPollTickFlash] = useState(false);
 
   const handleBgColor = (c: string) => {
     setBgColor(c);
@@ -1003,39 +1088,58 @@ export default function App() {
       .catch(e => { if (String(e).includes("decrypt")) setConfigError(String(e)); });
   }, []);
 
-  const saveConfig = useCallback(async (updates: Partial<AppConfig>) => {
-    const currentCfg = await fetch("./api/config").then(r => r.json()).catch(() => ({}));
-    const merged = { ...currentCfg, ...updates };
-    await fetch("./api/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(merged),
-    });
-    fetchDevices();
+  // fetch() only rejects on a network failure — a 4xx/5xx from the backend
+  // resolves normally, so every caller here explicitly checks res.ok and
+  // returns real success/failure instead of optimistically assuming it
+  // worked (this was the root cause of Settings controls claiming "saved"
+  // with no way to tell if the write actually landed).
+  const saveConfig = useCallback(async (updates: Partial<AppConfig>): Promise<boolean> => {
+    try {
+      const currentCfg = await fetch("./api/config").then(r => r.ok ? r.json() : Promise.reject());
+      const merged = { ...currentCfg, ...updates };
+      const res = await fetch("./api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(merged),
+      });
+      if (!res.ok) return false;
+      fetchDevices();
+      return true;
+    } catch {
+      return false;
+    }
   }, [fetchDevices]);
 
-  const handleNotifyToggle = useCallback((v: boolean) => {
+  const handleNotifyToggle = useCallback(async (v: boolean): Promise<boolean> => {
     setNotifyEnabled(v);
-    saveConfig({ notify_enabled: v });
+    const ok = await saveConfig({ notify_enabled: v });
+    if (!ok) setNotifyEnabled(!v); // roll back the optimistic UI update on a real failure
+    return ok;
   }, [saveConfig]);
 
-  const handlePollIntervalChange = useCallback((ms: number) => {
+  const handlePollIntervalChange = useCallback(async (ms: number): Promise<boolean> => {
+    const prev = pollIntervalMs;
     setPollIntervalMs(ms);
-    saveConfig({ poll_interval_ms: ms });
-  }, [saveConfig]);
+    const ok = await saveConfig({ poll_interval_ms: ms });
+    if (!ok) setPollIntervalMs(prev);
+    return ok;
+  }, [saveConfig, pollIntervalMs]);
 
   const normalizeSslPath = (p: string, def: string) => {
     const v = p.trim() || def;
     return v.startsWith("/") ? v : `/ssl/${v}`;
   };
 
-  const handleSavePaths = useCallback(async (cert: string, key: string) => {
+  const handleSavePaths = useCallback(async (cert: string, key: string): Promise<boolean> => {
     const c = normalizeSslPath(cert, DEFAULT_CERT_PATH);
     const k = normalizeSslPath(key,  DEFAULT_KEY_PATH);
-    setCertPath(c);
-    setKeyPath(k);
-    await saveConfig({ cert_path: c, key_path: k });
-    fetchCert();
+    const ok = await saveConfig({ cert_path: c, key_path: k });
+    if (ok) {
+      setCertPath(c);
+      setKeyPath(k);
+      fetchCert();
+    }
+    return ok;
   }, [saveConfig, fetchCert]);
 
   // SSE
@@ -1065,6 +1169,11 @@ export default function App() {
   useEffect(() => {
     if (!polling) return;
     const id = setInterval(async () => {
+      // Fires on every tick regardless of outcome — this is the only
+      // visible confirmation that the polling loop is actually alive
+      // and doing something, not just showing a static "polling" label.
+      setPollTickFlash(true);
+      setTimeout(() => setPollTickFlash(false), 700);
       const res = await fetch("./api/cert").catch(() => null);
       if (res?.ok) {
         certFailStreak.current = 0;
@@ -1219,8 +1328,11 @@ export default function App() {
               </div>
             )}
             <button onClick={() => setPolling(p => !p)}
+              title={polling ? "Click to pause polling" : "Click to resume polling"}
               className={`flex items-center gap-1.5 text-[14px] font-mono transition-colors ${polling ? "text-[#39d353] hover:text-[#39d353]/70" : "text-[#8b949e] hover:text-[#c9d1d9]"}`}>
-              {polling ? <Wifi size={13} /> : <WifiOff size={13} />}
+              {polling
+                ? <Wifi size={13} className={`transition-transform duration-300 ${pollTickFlash ? "scale-125" : "scale-100"}`} />
+                : <WifiOff size={13} />}
               {polling ? (certError ? "waiting" : "polling") : "paused"}
             </button>
             {/* Settings gear */}

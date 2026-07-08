@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.0.11] — 2026-07-08
+
+### Fixed
+- **Copy-to-clipboard silently did nothing** — the encryption key Copy button used `navigator.clipboard?.writeText(...)`, which short-circuits to `undefined` with no error and no rejection when the Clipboard API is unavailable (notably inside a cross-origin iframe without an explicit permissions policy — exactly how Home Assistant embeds add-on ingress UIs). Added a `document.execCommand('copy')` fallback for when the modern API is blocked, and the button now shows an explicit "copy failed, select and copy manually" message instead of failing invisibly either way.
+- **Settings controls always claimed "saved" even when the write failed** — `saveConfig()` only checked that `fetch()` didn't throw, but `fetch()` resolves normally on a 4xx/5xx from the server; a rejected save was previously indistinguishable from a real one. `saveConfig()` now checks `response.ok` and returns real success/failure, and the Poll Interval and Save Paths controls in Settings roll back their optimistic UI update and show a red "save failed" state when the write doesn't actually land, instead of a silent false positive.
+
+### Added
+- **Consistent "did something" feedback across Settings** — every action button (Rotate, Set/Restore Key, Save Paths) and the Poll Interval dropdown now flashes the same green used by the existing Refresh Local Cert Info button on success, and a red state on failure, so the whole app speaks one visual language for confirming an action actually happened.
+- **Polling indicator pulses on every check** — the Wifi icon next to "polling" now visibly pulses each time a poll tick actually fires (success or failure), as a lightweight substitute for a countdown timer that confirms the polling loop is alive without adding UI clutter.
+
+---
+
 ## [1.0.10] — 2026-07-08
 
 ### Added
