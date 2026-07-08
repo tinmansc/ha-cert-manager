@@ -12,7 +12,8 @@ WORKDIR /app
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Pre-built frontend static files
+# Pre-built frontend static files — run `cd frontend && npm run build` first if building locally.
+# CI builds frontend/dist in the same job before this step; it won't do it for you.
 COPY frontend/dist /app/static
 
 # Backend source

@@ -18,6 +18,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+import crypto_store
+import notify
 from cert_reader import read_local_cert
 from config import DeviceConfig, load_devices, OPTIONS_FILE
 from devices.base import DeployStatus, DeviceResult, Logger
@@ -85,7 +87,12 @@ def _status_for(dev: DeviceConfig) -> dict:
 # ── App lifespan ──────────────────────────────────────────────────────────────
 
 def _migrate_legacy_config():
-    """Move /data/options.json → OPTIONS_FILE if the new location doesn't exist yet."""
+    """Move /data/options.json → OPTIONS_FILE if the new location doesn't exist yet.
+
+    Writes plain JSON, matching the legacy file's format — crypto_store's
+    own load_config() transparently encrypts it the first time it's read,
+    so no separate encryption step is needed here.
+    """
     legacy = Path("/data/options.json")
     if not OPTIONS_FILE.exists() and legacy.exists():
         OPTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -97,6 +104,14 @@ def _migrate_legacy_config():
 async def lifespan(app: FastAPI):
     OPTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _migrate_legacy_config()
+    try:
+        crypto_store.load_config(logger=_emit)
+    except crypto_store.DecryptionError as exc:
+        # Fail loud at startup rather than silently serving an empty device
+        # list — the UI surfaces this via /api/config and /api/devices too,
+        # but logging it immediately means it's the first thing visible.
+        _emit("error", f"Could not decrypt device configuration: {exc}. "
+                        "Use Settings → Encryption Key to restore or reset the key.")
     _emit("info", "HA Cert Manager started")
     yield
     _emit("info", "HA Cert Manager shutting down")
@@ -107,7 +122,7 @@ app = FastAPI(title="HA Cert Manager", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -123,17 +138,74 @@ if STATIC.exists():
 
 @app.get("/api/config")
 def get_config():
-    if not OPTIONS_FILE.exists():
-        return {"devices": []}
-    return json.loads(OPTIONS_FILE.read_text())
+    try:
+        cfg = crypto_store.load_config(logger=_emit)
+        return cfg if cfg else {"devices": []}
+    except crypto_store.DecryptionError as e:
+        raise HTTPException(409, f"Could not decrypt device configuration: {e}")
 
 
 @app.post("/api/config")
 def save_config(body: dict):
-    OPTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    OPTIONS_FILE.write_text(json.dumps(body, indent=2))
+    crypto_store.save_config(body)
     _emit("info", "Device configuration saved")
     return {"ok": True}
+
+
+# ── Encryption key management ────────────────────────────────────────────────
+
+@app.get("/api/security/key")
+def get_key():
+    """Return the current master key so it can be displayed/copied in Settings.
+
+    Reachable only through the HA ingress-authenticated proxy, same trust
+    boundary as every other endpoint here — see DOCS.md for the security
+    model.
+    """
+    return {"key": crypto_store.ensure_key().decode()}
+
+
+@app.post("/api/security/rotate-key")
+def rotate_key():
+    """Generate a new random key and re-encrypt existing config under it. Safe — no data loss."""
+    try:
+        crypto_store.rotate_key(logger=_emit)
+        return {"ok": True, "key": crypto_store.ensure_key().decode()}
+    except Exception as e:
+        raise HTTPException(500, f"Key rotation failed: {e}")
+
+
+@app.post("/api/security/set-key")
+def set_key(body: dict):
+    """Adopt a manually-provided key — restores if it decrypts existing data,
+    otherwise requires force=true (the UI's typed "NO RECOVERY" gate) since
+    that path discards every stored credential."""
+    key = (body.get("key") or "").strip()
+    force = bool(body.get("force", False))
+    if not key:
+        raise HTTPException(400, "No key provided")
+    try:
+        data = crypto_store.set_key(key, force=force, logger=_emit)
+        return {"ok": True, "devices": len(data.get("devices", []))}
+    except crypto_store.DecryptionError:
+        raise HTTPException(409, "This key does not match the existing configuration. "
+                                  "Retry with force=true to accept permanent data loss.")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/notify")
+def notify_route(body: dict):
+    """Passthrough for client-detected conditions the frontend wants surfaced
+    in the HA UI (e.g. the local cert becoming unreadable for several
+    consecutive polls) — auto-triggered device deploy/check results are
+    notified directly from the backend instead, see deploy_all/check_all."""
+    ok = notify.notify_ha(
+        body.get("title", "HA Cert Manager"),
+        body.get("message", ""),
+        body.get("notification_id", "ha_cert_manager"),
+    )
+    return {"ok": ok}
 
 
 @app.post("/api/verify-host")
@@ -164,10 +236,12 @@ def verify_host(body: dict):
 def get_cert():
     from cert_reader import DEFAULT_CERT_PATH, DEFAULT_KEY_PATH  # noqa: PLC0415
     try:
-        cfg = json.loads(OPTIONS_FILE.read_text()) if OPTIONS_FILE.exists() else {}
+        cfg = crypto_store.load_config()
         cert_path = cfg.get("cert_path") or DEFAULT_CERT_PATH
         key_path  = cfg.get("key_path")  or DEFAULT_KEY_PATH
         return asdict(read_local_cert(cert_path, key_path))
+    except crypto_store.DecryptionError as e:
+        raise HTTPException(409, f"Could not decrypt device configuration: {e}")
     except FileNotFoundError as e:
         raise HTTPException(404, str(e))
     except PermissionError as e:
@@ -182,7 +256,7 @@ def get_addon_info():
     import urllib.request as _urllib
     token = os.environ.get("SUPERVISOR_TOKEN")
     if not token:
-        return {"update_available": False, "version_latest": None}
+        return {"update_available": False, "version_latest": None, "version": None}
     try:
         req = _urllib.Request(
             "http://supervisor/addons/self/info",
@@ -194,14 +268,25 @@ def get_addon_info():
         return {
             "update_available": addon.get("update_available", False),
             "version_latest": addon.get("version_latest"),
+            "version": addon.get("version"),
         }
     except Exception:
-        return {"update_available": False, "version_latest": None}
+        return {"update_available": False, "version_latest": None, "version": None}
+
+
+def _load_devices_or_409() -> list[DeviceConfig]:
+    """load_devices(), converting a decryption failure into a clear 409
+    instead of a bare 500 — every route that touches devices goes through
+    this so the failure mode is consistent no matter which endpoint hit it."""
+    try:
+        return load_devices()
+    except crypto_store.DecryptionError as e:
+        raise HTTPException(409, f"Could not decrypt device configuration: {e}")
 
 
 @app.get("/api/devices")
 def get_devices():
-    devices = load_devices()
+    devices = _load_devices_or_409()
     return [_status_for(d) for d in devices]
 
 
@@ -218,7 +303,7 @@ async def deploy_device(device_id: str):
 @app.post("/api/devices/{device_id}/backup")
 async def backup_device(device_id: str):
     """Trigger an OC200 config backup and save it to /config/backups/omada/."""
-    devices = load_devices()
+    devices = _load_devices_or_409()
     dev = next((d for d in devices if d.id == device_id), None)
     if dev is None:
         raise HTTPException(404, f"Device '{device_id}' not found")
@@ -257,18 +342,57 @@ async def download_latest_backup(device_id: str):
     )
 
 
+def _notify_deploy_summary(result_map: dict, triggered_by: str) -> None:
+    """Send an HA notification summarizing an auto-triggered deploy run.
+
+    Only called when auto=true (a cert renewal was detected, not a
+    manual button click) — these are infrequent (every 60-90 days per
+    device with Let's Encrypt) so there's no need to throttle or
+    deduplicate the way we do for the cert-read-failure alert below.
+    """
+    total = len(result_map)
+    failed = [r for r in result_map.values() if r.get("last_status") == "error"]
+    if failed:
+        title = "HA Cert Manager — deploy had failures"
+        message = (f"Auto-deploy after {triggered_by}: {total - len(failed)}/{total} devices succeeded.\n"
+                   f"Failed: {', '.join(r['name'] for r in failed)}")
+    else:
+        title = "HA Cert Manager — deploy succeeded"
+        message = f"Auto-deploy after {triggered_by}: all {total} device(s) updated successfully."
+    notify.notify_ha(title, message, notification_id="ha_cert_manager_deploy")
+
+
+def _notify_needs_deploy(result_map: dict, triggered_by: str) -> None:
+    """Notify when a cert renewal was detected but auto-deploy is off —
+    the user needs to know a manual deploy is now waiting on them."""
+    needs = [r for r in result_map.values() if r.get("last_status") == "needs_deploy"]
+    if needs:
+        notify.notify_ha(
+            "HA Cert Manager — certificate renewed",
+            f"{triggered_by}. {len(needs)} device(s) need a manual deploy: "
+            f"{', '.join(r['name'] for r in needs)}",
+            notification_id="ha_cert_manager_renewal",
+        )
+
+
 @app.post("/api/devices/deploy-all")
-async def deploy_all():
-    enabled = [dev for dev in load_devices() if dev.enabled]
+async def deploy_all(auto: bool = False):
+    enabled = [dev for dev in _load_devices_or_409() if dev.enabled]
     results = await asyncio.gather(*[_run_device(dev.id, deploy=True) for dev in enabled])
-    return dict(zip([dev.id for dev in enabled], results))
+    result_map = dict(zip([dev.id for dev in enabled], results))
+    if auto:
+        _notify_deploy_summary(result_map, triggered_by="a detected certificate renewal")
+    return result_map
 
 
 @app.post("/api/devices/check-all")
-async def check_all():
-    enabled = [dev for dev in load_devices() if dev.enabled]
+async def check_all(auto: bool = False):
+    enabled = [dev for dev in _load_devices_or_409() if dev.enabled]
     results = await asyncio.gather(*[_run_device(dev.id, deploy=False) for dev in enabled])
-    return dict(zip([dev.id for dev in enabled], results))
+    result_map = dict(zip([dev.id for dev in enabled], results))
+    if auto:
+        _notify_needs_deploy(result_map, triggered_by="A new certificate was detected")
+    return result_map
 
 
 @app.get("/api/events")
@@ -326,7 +450,7 @@ _DEPLOYERS = {
 
 
 async def _run_device(device_id: str, deploy: bool) -> dict:
-    devices = load_devices()
+    devices = _load_devices_or_409()
     dev = next((d for d in devices if d.id == device_id), None)
     if dev is None:
         raise HTTPException(404, f"Device '{device_id}' not found")
@@ -343,7 +467,7 @@ async def _run_device(device_id: str, deploy: bool) -> dict:
     _emit("info", f"Starting {action} for {dev.name}", device_id)
 
     try:
-        cfg_data = json.loads(OPTIONS_FILE.read_text()) if OPTIONS_FILE.exists() else {}
+        cfg_data = crypto_store.load_config()
         from cert_reader import DEFAULT_CERT_PATH, DEFAULT_KEY_PATH
         local = read_local_cert(
             cfg_data.get("cert_path") or DEFAULT_CERT_PATH,

@@ -4,7 +4,7 @@ import {
   Terminal, Eye, EyeOff, Loader2, Activity,
   Wifi, WifiOff, Settings2, X, Download, HardDrive,
   Plus, Trash2, Edit2, Save, ChevronDown, Settings, Zap,
-  FileWarning, FolderOpen,
+  FileWarning, FolderOpen, Copy, KeyRound, Bell,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -40,6 +40,8 @@ interface AppConfig {
   devices: DeviceConfigEntry[];
   cert_path?: string;
   key_path?: string;
+  notify_enabled?: boolean;
+  poll_interval_ms?: number;
 }
 
 interface BackupState { status: "idle"|"running"|"done"|"error"; filename?: string; error?: string; }
@@ -78,7 +80,30 @@ const BG_PRESETS = [
 
 const DEFAULT_CERT_PATH = "/ssl/fullchain.pem";
 const DEFAULT_KEY_PATH  = "/ssl/privkey.pem";
-const APP_VERSION       = "1.0.6";
+// Fallback only — real version comes from the Supervisor at runtime (see appVersion state).
+const APP_VERSION_FALLBACK = "unknown";
+
+// Geometric spacing, not linear — matches the cadence people expect from
+// pickers like Windows Update, not an arbitrary "every N minutes" slider.
+const POLL_INTERVALS: { label: string; value: number }[] = [
+  { label: "1 minute",   value: 60_000 },
+  { label: "5 minutes",  value: 300_000 },
+  { label: "15 minutes", value: 900_000 },
+  { label: "30 minutes", value: 1_800_000 },
+  { label: "1 hour",     value: 3_600_000 },
+  { label: "6 hours",    value: 21_600_000 },
+  { label: "12 hours",   value: 43_200_000 },
+  { label: "1 day",      value: 86_400_000 },
+];
+// Let's Encrypt certs are valid ~60-90 days — nothing here needs sub-minute
+// freshness, so default to a calmer cadence than the old hardcoded 60s.
+const DEFAULT_POLL_INTERVAL_MS = 900_000; // 15 min
+
+// A poll failure this many times in a row (not time-based — scales
+// naturally with whatever interval the user picked above) triggers a
+// single HA notification, with a matching "recovered" notification once
+// reads succeed again. Avoids alerting on a single transient blip.
+const CERT_FAIL_NOTIFY_THRESHOLD = 3;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -204,17 +229,201 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
+// ── Encryption Key management ───────────────────────────────────────────────
+//
+// Three actions, deliberately not symmetric:
+//   - View/copy: always safe, read-only.
+//   - Rotate: system generates a new random key and re-encrypts existing
+//     data under it automatically. No typing, no data loss, single
+//     lightweight confirm — this should be the default way to "change
+//     the key," not a destructive one.
+//   - Paste a key: covers both restoring a previously backed-up key and
+//     resetting after losing one, unified into a single flow. We try the
+//     pasted key against the *current* config.json first — if it
+//     decrypts, this was a legitimate restore and nothing is lost. Only
+//     if it fails do we ask for the typed "NO RECOVERY" confirmation,
+//     because that's the only path that actually destroys data.
+function EncryptionKeySection() {
+  const [key, setKey]         = useState<string | null>(null);
+  const [reveal, setReveal]   = useState(false);
+  const [copied, setCopied]   = useState(false);
+  const [busy, setBusy]       = useState(false);
+  const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [showRestore, setShowRestore]           = useState(false);
+  const [pasteKey, setPasteKey]                 = useState("");
+  const [pasteKeyConfirm, setPasteKeyConfirm]   = useState("");
+  const [needsForce, setNeedsForce]             = useState(false);
+  const [noRecoveryText, setNoRecoveryText]     = useState("");
+
+  useEffect(() => {
+    fetch("./api/security/key").then(r => r.json()).then(d => setKey(d.key)).catch(() => {});
+  }, []);
+
+  const copyKey = () => {
+    if (!key) return;
+    navigator.clipboard?.writeText(key).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+
+  const rotate = async () => {
+    if (!window.confirm(
+      "Rotate the encryption key?\n\nA new random key is generated and every stored device " +
+      "credential is automatically re-encrypted under it. Nothing is lost."
+    )) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r = await fetch("./api/security/rotate-key", { method: "POST" });
+      const d = await r.json();
+      if (r.ok) { setKey(d.key); setMsg({ ok: true, text: "Key rotated — all credentials re-encrypted." }); }
+      else setMsg({ ok: false, text: d.detail ?? "Rotation failed" });
+    } catch { setMsg({ ok: false, text: "Rotation failed" }); }
+    finally { setBusy(false); }
+  };
+
+  const resetRestoreForm = () => {
+    setShowRestore(false); setPasteKey(""); setPasteKeyConfirm("");
+    setNeedsForce(false); setNoRecoveryText("");
+  };
+
+  const submitPastedKey = async (force: boolean) => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await fetch("./api/security/set-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: pasteKey, force }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setKey(pasteKey);
+        setMsg({ ok: true, text: force
+          ? "Key replaced — previous credentials are unrecoverable, config reset to empty."
+          : `Key restored — ${d.devices} device(s) recovered.` });
+        resetRestoreForm();
+      } else if (r.status === 409 && !force) {
+        // Pasted key doesn't decrypt the existing file — this is now the
+        // destructive path. Require the typed confirmation before retrying.
+        setNeedsForce(true);
+      } else {
+        setMsg({ ok: false, text: d.detail ?? "Failed to set key" });
+      }
+    } catch { setMsg({ ok: false, text: "Failed to set key" }); }
+    finally { setBusy(false); }
+  };
+
+  const handleRestoreSubmit = () => {
+    if (!pasteKey) return;
+    if (pasteKey !== pasteKeyConfirm) { setMsg({ ok: false, text: "The two entries don't match" }); return; }
+    if (needsForce) {
+      if (noRecoveryText !== "NO RECOVERY") return;
+      submitPastedKey(true);
+    } else {
+      submitPastedKey(false);
+    }
+  };
+
+  return (
+    <div className="px-4 py-3 border-t border-[#21262d]">
+      <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center gap-1.5">
+        <KeyRound size={12} /> Encryption Key
+      </p>
+      <p className="font-mono text-[11px] text-[#484f58] mb-2 leading-relaxed">
+        Encrypts every stored device password, API key, and username at rest.
+        Back this up somewhere safe — without it, stored credentials cannot be recovered.
+      </p>
+
+      <div className="flex items-center gap-1.5 mb-2">
+        <input readOnly value={reveal ? (key ?? "loading…") : "•".repeat(24)}
+          className="flex-1 min-w-0 bg-[#010409] border border-[#30363d] rounded px-3 py-2 font-mono text-[13px] text-[#e6edf3] truncate" />
+        <button onClick={() => setReveal(r => !r)} title={reveal ? "Hide key" : "Reveal key"}
+          className="p-2 rounded border border-[#30363d] text-[#484f58] hover:text-[#8b949e] shrink-0">
+          {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
+        </button>
+        <button onClick={copyKey} title="Copy to clipboard" disabled={!key}
+          className="p-2 rounded border border-[#30363d] text-[#484f58] hover:text-[#8b949e] disabled:opacity-40 shrink-0">
+          {copied ? <CheckCircle2 size={13} className="text-[#39d353]" /> : <Copy size={13} />}
+        </button>
+      </div>
+
+      <div className="flex gap-2 mb-2">
+        <button onClick={rotate} disabled={busy}
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border border-[#30363d] font-mono text-[13px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 transition-colors">
+          <RefreshCw size={11} className={busy ? "animate-spin" : ""} /> Rotate
+        </button>
+        <button onClick={() => setShowRestore(s => !s)} disabled={busy}
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border border-[#30363d] font-mono text-[13px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 transition-colors">
+          <Upload size={11} /> Restore / Set Key
+        </button>
+      </div>
+
+      {msg && (
+        <p className={`font-mono text-[12px] mb-2 ${msg.ok ? "text-[#39d353]" : "text-[#f85149]"}`}>{msg.text}</p>
+      )}
+
+      {showRestore && (
+        <div className="mt-1 p-3 rounded border border-[#30363d] bg-[#010409] flex flex-col gap-2">
+          <p className="font-mono text-[11px] text-[#484f58]">
+            Paste a previously backed-up key. If it matches your current data, it's restored with
+            nothing lost. If it doesn't match, this becomes a destructive reset.
+          </p>
+          <TextInput value={pasteKey} onChange={v => { setPasteKey(v); setNeedsForce(false); }}
+            placeholder="Paste key" mono password />
+          <TextInput value={pasteKeyConfirm} onChange={setPasteKeyConfirm}
+            placeholder="Paste key again to confirm" mono password />
+
+          {needsForce && (
+            <div className="p-2 rounded border border-[#f85149]/40 bg-[#f85149]/10 flex flex-col gap-1.5">
+              <p className="font-mono text-[12px] text-[#f85149] leading-relaxed">
+                This key does NOT match your current stored credentials. Continuing will permanently
+                discard every device password, API key, and username on file. This cannot be undone.
+              </p>
+              <p className="font-mono text-[11px] text-[#8b949e]">
+                Type <span className="text-[#e6edf3] font-semibold">NO RECOVERY</span> to confirm:
+              </p>
+              <TextInput value={noRecoveryText} onChange={setNoRecoveryText} mono placeholder="NO RECOVERY" />
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleRestoreSubmit}
+              disabled={busy || !pasteKey || pasteKey !== pasteKeyConfirm || (needsForce && noRecoveryText !== "NO RECOVERY")}
+              className={`flex-1 py-1.5 rounded border font-mono text-[13px] transition-colors disabled:opacity-40 ${
+                needsForce
+                  ? "border-[#f85149]/60 bg-[#f85149]/20 text-[#f85149] hover:bg-[#f85149]/30"
+                  : "border-[#238636]/60 bg-[#238636]/20 text-[#39d353] hover:bg-[#238636]/30"
+              }`}
+            >
+              {needsForce ? "Replace key — data will be lost" : "Set Key"}
+            </button>
+            <button onClick={resetRestoreForm}
+              className="px-3 py-1.5 rounded border border-[#30363d] font-mono text-[13px] text-[#8b949e] hover:text-[#c9d1d9]">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Settings Panel ────────────────────────────────────────────────────────────
 
 function SettingsPanel({
   onClose, bgColor, onBgColor, certPath, keyPath, onSavePaths,
   autoDeployOnRenewal, onAutoDeployToggle,
+  notifyEnabled, onNotifyToggle, pollIntervalMs, onPollIntervalChange,
 }: {
   onClose: () => void;
   bgColor: string; onBgColor: (c: string) => void;
   certPath: string; keyPath: string;
   onSavePaths: (cert: string, key: string) => void;
   autoDeployOnRenewal: boolean; onAutoDeployToggle: (v: boolean) => void;
+  notifyEnabled: boolean; onNotifyToggle: (v: boolean) => void;
+  pollIntervalMs: number; onPollIntervalChange: (ms: number) => void;
 }) {
   const [localCert, setLocalCert] = useState(certPath);
   const [localKey,  setLocalKey]  = useState(keyPath);
@@ -229,7 +438,7 @@ function SettingsPanel({
   }, [onClose]);
 
   return (
-    <div ref={ref} className="absolute right-0 top-full mt-2 w-80 bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl z-50 overflow-hidden">
+    <div ref={ref} className="absolute right-0 top-full mt-2 w-80 max-h-[85vh] overflow-y-auto bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl z-50">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#21262d]">
         <span className="font-mono text-[15px] font-semibold text-[#e6edf3]">Settings</span>
         <button onClick={onClose} className="text-[#484f58] hover:text-[#8b949e]"><X size={14} /></button>
@@ -291,6 +500,41 @@ function SettingsPanel({
           </button>
         </label>
       </div>
+
+      {/* Polling interval */}
+      <div className="px-4 py-3 border-t border-[#21262d]">
+        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2">Polling Interval</p>
+        <p className="font-mono text-[11px] text-[#484f58] mb-2">
+          How often the dashboard re-checks the local cert and device status.
+        </p>
+        <div className="relative">
+          <select value={pollIntervalMs} onChange={e => onPollIntervalChange(parseInt(e.target.value))}
+            className="w-full appearance-none bg-[#010409] border border-[#30363d] rounded px-3 py-2 font-mono text-[14px] text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] transition-colors pr-8">
+            {POLL_INTERVALS.map(p => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#484f58] pointer-events-none" />
+        </div>
+      </div>
+
+      {/* HA notifications */}
+      <div className="px-4 py-3 border-t border-[#21262d]">
+        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center gap-1.5">
+          <Bell size={12} /> Notifications
+        </p>
+        <label className="flex items-center justify-between gap-3 cursor-pointer group">
+          <div>
+            <p className="font-mono text-[13px] text-[#e6edf3]">Home Assistant notifications</p>
+            <p className="font-mono text-[11px] text-[#484f58] mt-0.5">
+              Notify on auto-triggered deploy results and persistent cert-read failures
+            </p>
+          </div>
+          <Toggle checked={notifyEnabled} onChange={onNotifyToggle} />
+        </label>
+      </div>
+
+      <EncryptionKeySection />
     </div>
   );
 }
@@ -705,11 +949,17 @@ export default function App() {
   const [autoDeployOnRenewal, setAutoDeployOnRenewal] = useState(
     () => localStorage.getItem("ha-cert-autodeploy") === "true"
   );
+  const [notifyEnabled,   setNotifyEnabled]   = useState(true);
+  const [pollIntervalMs,  setPollIntervalMs]  = useState(DEFAULT_POLL_INTERVAL_MS);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion,   setLatestVersion]   = useState<string | null>(null);
+  const [appVersion,      setAppVersion]      = useState<string | null>(null);
+  const [configError,     setConfigError]     = useState<string | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const prevCertSerial   = useRef<string | null>(null);
   const certSerialInited = useRef(false);
+  const certFailStreak   = useRef(0);
+  const certFailNotified = useRef(false);
 
   // Refresh button flash
   const [certFlash, setCertFlash] = useState(false);
@@ -734,20 +984,23 @@ export default function App() {
 
   const fetchDevices = useCallback(() => {
     fetch("./api/devices")
-      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
-      .then(setDevices)
-      .catch(() => {});
+      .then(r => r.ok ? r.json() : r.json().then((e: {detail?: string}) => Promise.reject(e.detail ?? r.statusText)))
+      .then(data => { setDevices(data); setConfigError(null); })
+      .catch(e => { if (String(e).includes("decrypt")) setConfigError(String(e)); });
   }, []);
 
   const fetchConfig = useCallback(() => {
     fetch("./api/config")
-      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then(r => r.ok ? r.json() : r.json().then((e: {detail?: string}) => Promise.reject(e.detail ?? r.statusText)))
       .then((data: AppConfig) => {
         setConfigDevices(data.devices ?? []);
         if (data.cert_path) setCertPath(data.cert_path);
         if (data.key_path)  setKeyPath(data.key_path);
+        setNotifyEnabled(data.notify_enabled ?? true);
+        setPollIntervalMs(data.poll_interval_ms ?? DEFAULT_POLL_INTERVAL_MS);
+        setConfigError(null);
       })
-      .catch(() => {});
+      .catch(e => { if (String(e).includes("decrypt")) setConfigError(String(e)); });
   }, []);
 
   const saveConfig = useCallback(async (updates: Partial<AppConfig>) => {
@@ -760,6 +1013,16 @@ export default function App() {
     });
     fetchDevices();
   }, [fetchDevices]);
+
+  const handleNotifyToggle = useCallback((v: boolean) => {
+    setNotifyEnabled(v);
+    saveConfig({ notify_enabled: v });
+  }, [saveConfig]);
+
+  const handlePollIntervalChange = useCallback((ms: number) => {
+    setPollIntervalMs(ms);
+    saveConfig({ poll_interval_ms: ms });
+  }, [saveConfig]);
 
   const normalizeSslPath = (p: string, def: string) => {
     const v = p.trim() || def;
@@ -792,7 +1055,10 @@ export default function App() {
   useEffect(() => {
     fetch("./api/supervisor/addon-info")
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.update_available) { setUpdateAvailable(true); setLatestVersion(d.version_latest ?? null); } })
+      .then(d => {
+        if (d?.update_available) { setUpdateAvailable(true); setLatestVersion(d.version_latest ?? null); }
+        if (d?.version) setAppVersion(d.version);
+      })
       .catch(() => null);
   }, []);
 
@@ -801,6 +1067,22 @@ export default function App() {
     const id = setInterval(async () => {
       const res = await fetch("./api/cert").catch(() => null);
       if (res?.ok) {
+        certFailStreak.current = 0;
+        if (certFailNotified.current) {
+          // Was failing long enough to notify, now reading fine again — close the loop.
+          certFailNotified.current = false;
+          if (notifyEnabled) {
+            fetch("./api/notify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: "HA Cert Manager — certificate readable again",
+                message: "The local certificate file is readable again after a period of failure.",
+                notification_id: "ha_cert_manager_cert_error",
+              }),
+            }).catch(() => null);
+          }
+        }
         const data: LocalCert = await res.json();
         setCert(data);
         if (!certSerialInited.current) {
@@ -809,17 +1091,34 @@ export default function App() {
         } else if (prevCertSerial.current && data.serial !== prevCertSerial.current) {
           prevCertSerial.current = data.serial;
           if (autoDeployOnRenewal) {
-            fetch("./api/devices/deploy-all", { method: "POST" }).catch(() => null);
+            fetch("./api/devices/deploy-all?auto=true", { method: "POST" }).catch(() => null);
           } else {
             // Cert renewed but auto-deploy is off — run check-all so devices flip to NEEDS_DEPLOY
-            fetch("./api/devices/check-all", { method: "POST" }).catch(() => null);
+            fetch("./api/devices/check-all?auto=true", { method: "POST" }).catch(() => null);
+          }
+        }
+      } else {
+        certFailStreak.current += 1;
+        if (certFailStreak.current === CERT_FAIL_NOTIFY_THRESHOLD && !certFailNotified.current) {
+          certFailNotified.current = true;
+          if (notifyEnabled) {
+            fetch("./api/notify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: "HA Cert Manager — certificate unreadable",
+                message: `The local certificate file has failed to read for ${CERT_FAIL_NOTIFY_THRESHOLD} `
+                  + "consecutive checks. Check the cert paths in Settings.",
+                notification_id: "ha_cert_manager_cert_error",
+              }),
+            }).catch(() => null);
           }
         }
       }
       fetchDevices();
-    }, 60_000);
+    }, pollIntervalMs);
     return () => clearInterval(id);
-  }, [polling, fetchDevices, autoDeployOnRenewal]);
+  }, [polling, fetchDevices, autoDeployOnRenewal, notifyEnabled, pollIntervalMs]);
 
   const handleAddDevice = useCallback((d: DeviceConfigEntry) => {
     setShowModal(false);
@@ -941,6 +1240,8 @@ export default function App() {
                     setAutoDeployOnRenewal(v);
                     localStorage.setItem("ha-cert-autodeploy", String(v));
                   }}
+                  notifyEnabled={notifyEnabled} onNotifyToggle={handleNotifyToggle}
+                  pollIntervalMs={pollIntervalMs} onPollIntervalChange={handlePollIntervalChange}
                 />
               )}
             </div>
@@ -949,6 +1250,19 @@ export default function App() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 flex flex-col gap-6">
+
+        {configError && (
+          <section className="rounded border border-[#f85149]/30 bg-[#f85149]/10 p-4 flex items-start gap-3">
+            <FileWarning size={18} className="text-[#f85149] shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[15px] font-semibold text-[#f85149] mb-1">Device configuration is unreadable</p>
+              <p className="font-mono text-[13px] text-[#c9d1d9] leading-relaxed">{configError}</p>
+              <p className="font-mono text-[13px] text-[#484f58] mt-1">
+                Open <button onClick={() => setShowSettings(true)} className="text-[#58a6ff] hover:underline">Settings → Encryption Key</button> to restore or reset the key.
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* ── Cert Banner ─────────────────────────────────────────────── */}
         <section className="rounded border border-[#21262d] bg-card p-5">
@@ -1014,7 +1328,7 @@ export default function App() {
 
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[12px] text-[#484f58] tracking-widest">v{APP_VERSION}</span>
+                  <span className="font-mono text-[12px] text-[#484f58] tracking-widest">v{appVersion ?? APP_VERSION_FALLBACK}</span>
                   {updateAvailable && (
                     <a
                       href="/hassio/addon/ha_cert_manager/info"
@@ -1142,16 +1456,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* HP Switch note */}
-              <div className="rounded border border-[#e3b341]/20 bg-[#e3b341]/5 px-4 py-3 flex gap-3">
-                <span className="text-[#e3b341] text-[14px] mt-px">⚠</span>
-                <div>
-                  <p className="font-mono text-[13px] text-[#e3b341] mb-1">HP Switch 1950 — one-time file required</p>
-                  <p className="font-mono text-[13px] text-[#8b949e]">Place the ISRG Root YR (cross-signed) PEM at:</p>
-                  <p className="font-mono text-[13px] text-[#c9d1d9] mt-0.5">/config/scripts/hpe-1950-isrg-root-x1.pem</p>
-                  <p className="font-mono text-[13px] text-[#8b949e] mt-1">All other credentials and switch settings are configured in the device editor.</p>
-                </div>
-              </div>
 
               <button onClick={() => { setEditingDevice(undefined); setShowModal(true); }}
                 className="self-start inline-flex items-center gap-2 px-4 py-2 rounded border border-[#1f6feb]/40 bg-[#1f6feb]/10 font-mono text-[15px] text-[#58a6ff] hover:bg-[#1f6feb]/20 transition-colors">

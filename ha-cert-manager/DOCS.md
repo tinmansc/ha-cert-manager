@@ -1,6 +1,6 @@
 # HA Cert Manager
 
-Unified Let's Encrypt certificate deployment dashboard for all your network devices. Deploy your HA-managed certs to firewalls, switches, NAS devices, and more — all from one place.
+Unified Let's Encrypt certificate deployment dashboard for your network devices. Deploy your HA-managed cert to TrueNAS, Hubitat, pfSense, TP-Link Omada, HPE switches, and Brother printers — all from one place.
 
 ## First-time setup
 
@@ -25,12 +25,12 @@ After the add-on starts, click **Open Web UI** at the top of the add-on page, or
 
 On first launch the dashboard will be empty. Click **Add Device** and fill in the connection details for each network device you want to deploy certificates to. Supported device types:
 
-- **Unifi** — UDM, UDM Pro, UDM SE, UniFi OS consoles
-- **Synology** — DSM 6 and DSM 7 NAS devices
-- **QNAP** — QTS NAS devices
-- **HPE / Aruba** — Comware 7 switches (1950 series)
-- **Proxmox** — PVE and PBS nodes
-- **Generic HTTPS** — any device that accepts a cert upload via HTTPS
+- **TrueNAS** — TrueNAS CORE and SCALE via REST API
+- **Brother MFC** — Brother MFC-J4335DW (and similar models with web-based cert upload)
+- **Hubitat** — Hubitat Elevation C-7 via local API
+- **HPE Comware 7** — HPE 1950 series switches via SSH (tested on 1950; likely works on any Comware 7 switch)
+- **TP-Link Omada** — OC200 / OC300 controllers
+- **pfSense** — pfSense firewalls via REST API
 
 ## SSL certificate path
 

@@ -5,6 +5,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.0.10] — 2026-07-08
+
+### Added
+- **Encrypted device configuration at rest** — `config.json` (device hostnames, usernames, passwords, API keys) is now encrypted as a single whole-file Fernet token instead of stored as plaintext JSON. Whole-file encryption was chosen over per-field encryption specifically so a new sensitive field added later (like `username`, which almost shipped unencrypted) is protected automatically instead of relying on someone remembering to flag it.
+  - Key material lives in its own `master.key` file next to `config.json`, both under `/config/ha_cert_manager/` — the same directory Home Assistant backs up and restores as a unit. Deliberately **not** derived from `SUPERVISOR_TOKEN`, since that token is reissued by the Supervisor on reinstall and is not guaranteed to survive a backup restore.
+  - Existing plaintext `config.json` from pre-1.0.10 installs is transparently migrated to encrypted storage on first read — no manual step required.
+  - Atomic writes (temp file + fsync + rename) and a one-deep `config.json.bak` backup on every save, so a crash or power loss mid-write can never leave a corrupted config file.
+  - Decryption failures fail loud — surfaced as a dedicated error banner in the UI and logged at startup — instead of silently serving an empty device list.
+  - The master key is read into two separate buffers and compared before use, and a decrypt failure with the cached in-memory key triggers one retry from a fresh disk read before erroring — guards against a stale or bit-flipped in-memory key copy (plausible on SBC hardware like a Pi running hot with no ECC RAM) being mistaken for genuine data corruption.
+- **Settings → Encryption Key panel** — view/reveal/copy the current key, **Rotate** (generates a new random key and automatically re-encrypts existing data — safe, no data loss, no typing required), and **Restore / Set Key** (paste a previously backed-up key; restores automatically if it decrypts your existing data, otherwise requires typing `NO RECOVERY` to confirm a destructive reset).
+- **Settings → Polling Interval** — configurable cadence for the dashboard's cert/device status checks: 1 min, 5 min, 15 min, 30 min, 1 hour, 6 hours, 12 hours, 1 day. Replaces the old hardcoded 60-second interval; new installs default to 15 minutes (Let's Encrypt certs don't need sub-minute freshness).
+- **Home Assistant notifications** — new Settings toggle (default on). Auto-triggered deploy/check runs (fired when a cert renewal is detected, not manual button clicks) now post a persistent notification in the HA UI summarizing the result (success/failure/partial, which devices need attention). The local cert file becoming unreadable for 3 consecutive polls also notifies, with a matching "recovered" notification once it's readable again. Uses `SUPERVISOR_TOKEN` via the Supervisor's Core API proxy — no user-managed long-lived access token required (replacing the pattern an early prototype script used, which required hand-pasting an HA token into a config file).
+
+### Fixed
+- **`APP_VERSION` hardcoded string in `App.tsx`** — the version badge drifted 3 releases stale (`1.0.6` shown while the add-on was on `1.0.9`). Now reads the running version live from `/api/supervisor/addon-info`.
+- **CORS methods tightened** — `allow_methods` restricted from `["*"]` to `["GET", "POST"]`, matching the API's actual surface.
+- **Leftover Figma scaffold name** — `frontend/package.json` was still named `@figma/my-make-file`; renamed to `ha-cert-manager-frontend`.
+- **Stale HP Switch 1950 setup note removed from the Getting Started panel** — instructed users to manually place an ISRG Root YR PEM file, which stopped being necessary when auto-extraction shipped in 1.0.6.
+- **Inaccurate DOCS.md device list** — previously listed Synology, generic Unifi, Aruba, and Proxmox support that was never built. Corrected to the six device types actually implemented (TrueNAS, Brother, Hubitat, HPE Comware 7, TP-Link Omada, pfSense).
+- **`.gitignore` entry for the renamed local prototype folder** — `Certificate Upload Automation-Alpha/` was ignored but the folder had since been renamed to `-OLD`, so it showed up as untracked noise in `git status`.
+
+---
+
+## [1.0.9] — 2026-07-07
+
+### Fixed
+- **No-cert UX** — when no Let's Encrypt cert is present in `/ssl`, the dashboard now handles it gracefully instead of showing a confusing error state.
+  - Cert banner shows a soft "no certificate loaded" placeholder when no devices are configured yet; the red error banner only appears once devices exist (where it's actionable).
+  - Getting Started step 1 label switches to "Install Let's Encrypt" when no cert is detected (was always "Certificate detected" regardless of state).
+  - Polling indicator shows "waiting" instead of "polling" when cert is absent — nothing productive to poll.
+- **`cert.subject` undefined bug** — Getting Started panel referenced `cert.subject` which doesn't exist on `LocalCert`; corrected to `cert.domain`.
+
+---
+
+## [1.0.8] — 2026-07-07
+
+### Added
+- **DOCS.md** — first-time setup guide shown in the HA add-on info panel. Covers recommended control settings (Start on boot, Watchdog, Auto update, Show in sidebar) and how to open the dashboard.
+- **`url:` field in config.yaml** — "Visit HA Cert Manager" link in the add-on info panel now goes to the GitHub repo instead of looping back to the add-on page.
+- **RELEASE_CHECKLIST.md** — pre-push checklist documenting required steps and common mistakes (image tag format, shebang, CI timing).
+
+### Fixed
+- **Example config scrubbed** — `options.example.json` and checklist replaced personal domain references with `example.com` equivalents.
+
+---
+
+## [1.0.7] — 2026-07-07
+
+### Fixed
+- **Add-on startup crash** — `run.sh` shebang changed from `#!/usr/bin/with-contenv bashio` to `#!/bin/sh`. The `with-contenv` interpreter doesn't exist in the `python:3.12-alpine` base image, causing the container to exit immediately on start with "exec /run.sh: no such file or directory".
+- **Add-on not appearing in HA App Store** — `image:` field in `config.yaml` had a `:{version}` tag suffix. HA Supervisor rejects any tag in the `image:` field (it appends the version itself). Removed the suffix.
+
+### Added
+- **GitHub Actions CI** — `.github/workflows/build.yml` builds a multi-arch Docker image (`linux/amd64`, `linux/arm64`) and pushes to GHCR on every push to `main` that touches relevant files. Version tag is extracted automatically from `config.yaml`.
+
+---
+
 ## [1.0.6] — 2026-07-06
 
 ### Added

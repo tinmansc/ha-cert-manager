@@ -1,14 +1,16 @@
-"""Loads device configuration from /data/options.json (HA add-on options)."""
+"""Loads device configuration from the encrypted config store (crypto_store.py)."""
 from __future__ import annotations
 
-import json
-import os
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional
 
+import crypto_store
 
-OPTIONS_FILE = Path(os.environ.get("OPTIONS_FILE", "/config/ha_cert_manager/config.json"))
+# Kept as an alias — other modules import OPTIONS_FILE as "the config file path"
+# for logging/display purposes. The file on disk is now an encrypted Fernet
+# token, not raw JSON; always go through crypto_store.load_config() /
+# save_config() to read or write it.
+OPTIONS_FILE = crypto_store.CONFIG_FILE
 
 
 @dataclass
@@ -34,10 +36,8 @@ class DeviceConfig:
     omadac_id: Optional[str] = None   # 32-char hex; auto-discovered if omitted
 
 
-def load_devices() -> list[DeviceConfig]:
-    if not OPTIONS_FILE.exists():
-        return []
-    raw = json.loads(OPTIONS_FILE.read_text())
+def load_devices(logger=None) -> list[DeviceConfig]:
+    raw = crypto_store.load_config(logger=logger)
     devices = []
     for d in raw.get("devices", []):
         devices.append(DeviceConfig(
