@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "ha-cert-manager/**"
+      - "certfleet/**"
 
 jobs:
   build:
@@ -23,11 +23,11 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: ha-cert-manager/frontend/package-lock.json
+          cache-dependency-path: certfleet/frontend/package-lock.json
 
       - name: Build frontend
         run: |
-          cd ha-cert-manager/frontend
+          cd certfleet/frontend
           npm ci
           npm run build
 
@@ -47,19 +47,19 @@ jobs:
       - name: Get version from config.yaml
         id: meta
         run: |
-          VERSION=$(grep '^version:' ha-cert-manager/config.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
+          VERSION=$(grep '^version:' certfleet/config.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version $VERSION"
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./ha-cert-manager
+          context: ./certfleet
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/tinmansc/ha-cert-manager:${{ steps.meta.outputs.version }}
-            ghcr.io/tinmansc/ha-cert-manager:latest
+            ghcr.io/tinmansc/certfleet:${{ steps.meta.outputs.version }}
+            ghcr.io/tinmansc/certfleet:latest
           build-args: |
             BUILD_FROM=python:3.12-alpine
           cache-from: type=gha

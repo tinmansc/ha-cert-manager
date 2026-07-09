@@ -1,6 +1,6 @@
-# HA Cert Manager
+# CertFleet
 
-[![Release](https://img.shields.io/github/v/release/tinmansc/ha-cert-manager)](https://github.com/tinmansc/ha-cert-manager/releases)
+[![Release](https://img.shields.io/github/v/release/tinmansc/CertFleet)](https://github.com/tinmansc/CertFleet/releases)
 
 ## Origin Story
 
@@ -27,13 +27,13 @@ A Home Assistant add-on that deploys your Let's Encrypt certificate to every dev
 
 1. In Home Assistant, go to **Settings → Add-ons → Add-on store**
 2. Click the three-dot menu (⋮) → **Repositories**
-3. Add: `https://github.com/tinmansc/ha-cert-manager`
-4. Find **HA Cert Manager** in the store and install it
+3. Add: `https://github.com/tinmansc/CertFleet`
+4. Find **CertFleet** in the store and install it
 5. Enable **Show in sidebar** and start the add-on
 
 ## Usage
 
-1. Open **Cert Manager** from the sidebar
+1. Open **CertFleet** from the sidebar
 2. Add your devices using the **+ Add Device** button
 3. Click **Verify** to test credentials and check cert status
 4. Click **Deploy** (or **Deploy All**) to push the cert
@@ -45,6 +45,6 @@ The add-on connects to HP 1950 switches via SSH and uses Comware's PKI system to
 
 ## Development
 
-See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the version bump and release process.
+See [certfleet/RELEASE_CHECKLIST.md](certfleet/RELEASE_CHECKLIST.md) for the version bump and release process.
 
 Pre-built multi-arch images (amd64 + aarch64) are published to GHCR on every push to `main` via GitHub Actions.
