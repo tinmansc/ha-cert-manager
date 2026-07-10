@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0] — 2026-07-10
+
+### Added
+- **Local certificate change logging** — the event log now records a line with serial + SHA256 whenever a certificate is first detected at startup, and again any time the fingerprint changes (i.e. a renewal). Runs server-side on every `/api/cert` read (which happens every poll tick regardless of whether the dashboard is open), not just when a browser tab happens to be watching.
+- **TrueNAS API key expiry check** — `check()`/`deploy()` now look up the configured key's own `expires_at`/`revoked` status (TrueNAS API keys are formatted `<id>-<secret>`, so the id alone identifies the exact key via `GET /api_key` — no fuzzy matching needed) and surface a warning through the existing amber "Heads up" box when a key is revoked or expiring within 14 days. This is advisory only and never gates the actual connection attempt — a real auth/connection failure is still always a hard red error regardless of what the key metadata says, and a flagged key that still connects successfully still reports success.
+
+### Fixed
+- **Hubitat device form asked for the wrong credential.** `TYPE_FIELDS.hubitat` in the Add Device modal collected an "API key" field, but `hubitat.py` has only ever authenticated with username/password against the hub's web login — the API key field was silently never read, and username/password were silently never collected. Any Hubitat device added through the GUI was authenticating with blank credentials with no visible error. Fixed to collect username/password, matching the real backend; verified live in browser afterward.
+- **Event log "clear" didn't stick.** `/api/events` replays its full history on every SSE connection, and the browser's `EventSource` auto-reconnects a few seconds after any network blip — so clicking "clear" (which only wiped local state) would see old entries silently reappear once a reconnect replayed the backend's buffer. Fixed by tracking a `clearedBeforeId` boundary and filtering both replayed and new entries against it, with a real "Event log cleared" marker entry recording when it happened.
+
+---
+
 ## [1.2.0] — 2026-07-10
 
 ### Added

@@ -66,7 +66,7 @@ const TYPE_FIELDS: Record<DeviceType, string[]> = {
   truenas:  ["api_key", "verify_tls"],
   pfsense:  ["username", "password", "port", "pfsense_allow_upload", "ssl_policy", "pki_domain"],
   comware:  ["username", "password", "api_key", "port", "pki_domain", "ssl_policy", "startup_config_path"],
-  hubitat:  ["api_key", "port"],
+  hubitat:  ["username", "password", "port"],
   omada:    ["username", "password", "site_id", "omadac_id", "verify_tls"],
   brother:  ["password"],
   proxmox:  ["username", "api_key", "site_id", "port", "proxmox_allow_upload"],
@@ -1099,6 +1099,11 @@ export default function App() {
   const [certError, setCertError]   = useState<string | null>(null);
   const [devices, setDevices]       = useState<Device[]>([]);
   const [logs, setLogs]             = useState<LogEntry[]>([]);
+  // The backend replays its whole log buffer on every SSE (re)connect —
+  // which happens on its own after any network blip, not just page reloads —
+  // so "clear" has to remember a boundary id and keep filtering the replay,
+  // not just wipe local state once.
+  const clearedBeforeId = useRef(0);
   const [polling, setPolling]       = useState(true);
   const [deployingAll, setDeployingAll]   = useState(false);
   const [verifyingAll, setVerifyingAll]   = useState(false);
@@ -1232,6 +1237,7 @@ export default function App() {
     const es = new EventSource("./api/events");
     es.onmessage = (e) => {
       const entry: LogEntry = JSON.parse(e.data);
+      if (entry.id <= clearedBeforeId.current) return;
       setLogs(prev => prev.some(e => e.id === entry.id) ? prev : [entry, ...prev.slice(0, 199)]);
       fetchDevices();
     };
@@ -1689,7 +1695,20 @@ export default function App() {
             </div>
             <div className="flex items-center gap-3">
               <span className="font-mono text-[14px] text-[#484f58]">{logs.length} entries</span>
-              <button onClick={() => setLogs([])} className="font-mono text-[14px] text-[#30363d] hover:text-[#8b949e] transition-colors">clear</button>
+              <button
+                onClick={() => {
+                  const maxId = logs.reduce((m, l) => Math.max(m, l.id), 0);
+                  clearedBeforeId.current = maxId;
+                  setLogs([{
+                    id: maxId,
+                    ts: new Date().toISOString(),
+                    level: "info",
+                    msg: "Event log cleared",
+                    device: null,
+                  }]);
+                }}
+                className="font-mono text-[14px] text-[#30363d] hover:text-[#8b949e] transition-colors"
+              >clear</button>
             </div>
           </div>
           <div className="overflow-y-auto space-y-px" style={{ maxHeight: "320px", scrollbarWidth: "thin", scrollbarColor: "#30363d transparent" }}>

@@ -22,6 +22,44 @@ def _make_ctx() -> ssl.SSLContext:
     return ctx
 
 
+KEY_EXPIRY_WARN_DAYS = 14
+
+
+def _check_key_expiry(api, api_key: str, log: Logger) -> Optional[str]:
+    """Advisory only — never gates the actual connection attempt above this.
+    TrueNAS API keys are formatted '<id>-<secret>'; the id tells us which
+    entry in GET /api_key is ours without needing the plaintext secret to
+    match anything. Any failure here (older TrueNAS without this endpoint,
+    unexpected format, etc.) is swallowed — this is a nice-to-have, not a
+    reason to fail an otherwise-successful check/deploy."""
+    try:
+        key_id = int(api_key.split("-", 1)[0])
+        keys = api("api_key", exit_on_error=False)
+        if not keys:
+            return None
+        mine = next((k for k in keys if k.get("id") == key_id), None)
+        if mine is None:
+            return None
+        if mine.get("revoked"):
+            reason = mine.get("revoked_reason") or "no reason given"
+            log("warn", f"TrueNAS: API key '{mine.get('name')}' is revoked ({reason})")
+            return f"This device's API key ('{mine.get('name')}') has been revoked ({reason})."
+        expires = mine.get("expires_at")
+        if not expires or not expires.get("$date"):
+            return None
+        expires_dt = datetime.datetime.fromtimestamp(expires["$date"] / 1000, tz=datetime.timezone.utc)
+        days_left = (expires_dt - datetime.datetime.now(datetime.timezone.utc)).days
+        if days_left < 0:
+            log("warn", f"TrueNAS: API key '{mine.get('name')}' expired {-days_left} day(s) ago")
+            return f"This device's API key ('{mine.get('name')}') expired {-days_left} day(s) ago."
+        if days_left <= KEY_EXPIRY_WARN_DAYS:
+            log("warn", f"TrueNAS: API key '{mine.get('name')}' expires in {days_left} day(s)")
+            return f"This device's API key ('{mine.get('name')}') expires in {days_left} day(s)."
+        return None
+    except Exception:
+        return None
+
+
 def check(cfg: DeviceConfig, local: Optional[LocalCert], log: Logger) -> DeviceResult:
     return _run(cfg, local, log, deploy=False)
 
@@ -57,6 +95,7 @@ def _run(cfg: DeviceConfig, local: LocalCert, log: Logger, deploy: bool) -> Devi
         log("info", f"TrueNAS: checking current certificate at {host}")
         general = api("system/general")
         log("info", "TrueNAS: API key authenticated — system/general OK")
+        key_warning = _check_key_expiry(api, cfg.api_key or "", log)
         cert_info = general.get("ui_certificate")
 
         current_id = None
@@ -85,6 +124,7 @@ def _run(cfg: DeviceConfig, local: LocalCert, log: Logger, deploy: bool) -> Devi
                 status=DeployStatus.NO_LOCAL_CERT,
                 message="Connected — credentials OK (no local cert to compare)",
                 live_fingerprint=fp,
+                warning=key_warning,
             )
 
         local_content = Path(local.cert_path).read_text().strip()
@@ -97,6 +137,7 @@ def _run(cfg: DeviceConfig, local: LocalCert, log: Logger, deploy: bool) -> Devi
                 message="Certificate current",
                 live_fingerprint=fp,
                 local_fingerprint=local.fingerprint,
+                warning=key_warning,
             )
 
         if not deploy:
@@ -110,6 +151,7 @@ def _run(cfg: DeviceConfig, local: LocalCert, log: Logger, deploy: bool) -> Devi
                 message="Certificate differs — deploy required",
                 live_fingerprint=live_fp,
                 local_fingerprint=local.fingerprint,
+                warning=key_warning,
             )
 
         cert_name = f"LetsEncrypt_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -150,6 +192,7 @@ def _run(cfg: DeviceConfig, local: LocalCert, log: Logger, deploy: bool) -> Devi
             message=f"Deployed {cert_name}",
             live_fingerprint=fp,
             local_fingerprint=local.fingerprint,
+            warning=key_warning,
         )
 
     except Exception as exc:

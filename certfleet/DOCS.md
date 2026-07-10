@@ -2,6 +2,11 @@
 
 Unified Let's Encrypt certificate deployment dashboard for your network devices. Deploy your HA-managed cert to TrueNAS, Hubitat, pfSense, TP-Link Omada, HPE switches, and Brother printers — all from one place.
 
+> **Before you click Start: turn on "Show in sidebar" below.** It's off by
+> default. Without it, there's no shortcut to the dashboard anywhere in Home
+> Assistant's UI once the add-on is running — see **First-time setup** below
+> for the full list of recommended settings.
+
 > **Upgrading from HA Cert Manager?** This add-on was renamed from "HA Cert Manager" (slug `ha_cert_manager`) to CertFleet (slug `certfleet`). Home Assistant treats a slug change as installing a new add-on, so CertFleet copies your existing devices and encryption key forward automatically on first boot — check the event log for a "Migrated ... from the old ha_cert_manager add-on directory" line to confirm. Once you've verified your devices are there, uninstall the old "HA Cert Manager" add-on entry.
 
 ## First-time setup

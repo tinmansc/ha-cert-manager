@@ -65,6 +65,28 @@ def _make_logger(device_id: str) -> Logger:
     return log
 
 
+# ── Local cert change tracking ────────────────────────────────────────────────
+
+_last_cert_fingerprint: str | None = None
+
+
+def _note_cert_if_changed(local) -> None:
+    """Log serial + SHA256 once at startup and again whenever the fingerprint
+    changes, so a renewal is visible in the event log even if no one has the
+    dashboard open when it happens — /api/cert is polled often enough
+    (frontend + this) that a real renewal is caught within one interval."""
+    global _last_cert_fingerprint
+    if local is None or local.fingerprint == _last_cert_fingerprint:
+        return
+    first_time = _last_cert_fingerprint is None
+    _last_cert_fingerprint = local.fingerprint
+    _emit(
+        "info" if first_time else "success",
+        f"{'Certificate detected' if first_time else 'Certificate changed'}: "
+        f"{local.domain} — serial {local.serial}, SHA256 {local.fingerprint}",
+    )
+
+
 # ── Device status cache ───────────────────────────────────────────────────────
 
 _device_status: dict[str, dict] = {}   # id -> {status, last_run, last_result}
@@ -121,6 +143,14 @@ async def lifespan(app: FastAPI):
         _emit("error", f"Could not decrypt device configuration: {exc}. "
                         "Use Settings → Encryption Key to restore or reset the key.")
     _emit("info", "CertFleet started")
+    try:
+        from cert_reader import DEFAULT_CERT_PATH, DEFAULT_KEY_PATH  # noqa: PLC0415
+        cfg = crypto_store.load_config()
+        cert_path = cfg.get("cert_path") or DEFAULT_CERT_PATH
+        key_path  = cfg.get("key_path")  or DEFAULT_KEY_PATH
+        _note_cert_if_changed(read_local_cert(cert_path, key_path))
+    except Exception:
+        pass  # /api/cert will report the real error to the UI; startup shouldn't crash on it
     yield
     _emit("info", "CertFleet shutting down")
 
@@ -249,7 +279,9 @@ def get_cert():
         cfg = crypto_store.load_config()
         cert_path = cfg.get("cert_path") or DEFAULT_CERT_PATH
         key_path  = cfg.get("key_path")  or DEFAULT_KEY_PATH
-        return asdict(read_local_cert(cert_path, key_path))
+        local = read_local_cert(cert_path, key_path)
+        _note_cert_if_changed(local)
+        return asdict(local)
     except crypto_store.DecryptionError as e:
         raise HTTPException(409, f"Could not decrypt device configuration: {e}")
     except FileNotFoundError as e:

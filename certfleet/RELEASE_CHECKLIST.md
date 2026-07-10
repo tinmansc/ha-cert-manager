@@ -99,6 +99,21 @@ kind that quietly destroys trust rather than throwing an obvious error.
 - [ ] **Encryption key verification on save/close**: any operation that writes
       `master.key` and/or `config.json` decrypts the result to actually prove
       it before reporting success — not just "the write call didn't throw."
+- [ ] **Frontend/backend field parity**: for every device type, `TYPE_FIELDS`
+      in `App.tsx` collects exactly the fields the matching `devices/*.py`
+      deployer actually reads — no field shown that the backend ignores, no
+      field the backend needs that isn't collected. This drifted silently for
+      Hubitat (GUI asked for "API key", backend only ever read
+      username/password) — nothing errored, it just quietly authenticated
+      with empty credentials. Check this any time a device type's fields
+      change on either side.
+- [ ] **Event log survives a clear across an SSE reconnect**: `/api/events`
+      replays the full `_log_buffer` on every new connection, and the browser
+      reconnects `EventSource` on its own after any blip — a few seconds
+      after clicking "clear," old entries would silently reappear unless the
+      frontend's `clearedBeforeId` boundary (see `App.tsx`) is still being
+      respected. If you touch the SSE handler or the log buffer, re-check
+      this by hand: clear, wait >5s, confirm nothing comes back.
 
 ---
 
@@ -115,3 +130,5 @@ kind that quietly destroys trust rather than throwing an obvious error.
 > - Assumed the Proxmox API path for reading a token's own metadata was `/access/users/{userid}/tokens/{tokenid}` (plural "tokens") — wrong, and confirmed wrong by testing against a real node before it ever shipped: that path returns "not implemented," the real one is singular, `/access/users/{userid}/token/{tokenid}`. Always verify an assumed API path against the real device before writing the calling code around it, not after.
 > - `EMPTY_DEVICE.site_id` in `App.tsx` defaulted to the literal string `"Default"` instead of an empty string with a placeholder — harmless for Omada (whose deployer, it turns out, never actually reads `site_id` at all) but became a real landmine once Proxmox repurposed the same field as a *required* node name: every new Proxmox device silently started with an invalid node name unless the user noticed and cleared the field.
 > - The first version of the cert-coverage check (1.2.0) only read DNS-name SANs off a device's live certificate, missing IP-address SANs entirely — would have produced a false "not covered" warning on any device configured by IP whose self-signed cert includes that same IP as a SAN, which is a common pattern (caught by testing against the real Proxmox box, which does exactly this).
+> - `TYPE_FIELDS.hubitat` in `App.tsx` asked for an "API key" — but `hubitat.py` has only ever authenticated with username/password against the hub's web login. Any Hubitat device added through the GUI silently got empty username/password and a never-used API key field; nothing surfaced an error, it just quietly authenticated with blank credentials. Caught by the user noticing the Add Device form didn't match what they remembered configuring. Fixed by correcting `TYPE_FIELDS` to match the real backend, verified live in browser afterward. Lesson: when a device's auth mechanism is ever changed, check BOTH sides — it's easy for one to drift without any error, since empty-string credentials don't throw, they just fail (or worse, quietly no-op) downstream.
+> - `/api/events`'s SSE endpoint replays the entire `_log_buffer` on every new connection — which is correct and necessary for a client that just opened the page, but means the browser's automatic `EventSource` reconnect (fires a few seconds after any network hiccup) silently replays history that a user had just clicked "clear" on, since clear only ever touched local React state. Fixed by tracking a `clearedBeforeId` boundary client-side and filtering replayed/new entries against it, plus dropping a real "Event log cleared" marker into the log so the boundary is visible.
