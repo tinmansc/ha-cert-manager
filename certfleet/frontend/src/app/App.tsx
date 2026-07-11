@@ -232,7 +232,7 @@ function logLevelColor(l: LogEntry["level"]) {
 
 function Pill({ label, color }: { label: string; color: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[13px] font-mono font-medium uppercase tracking-wider ${color}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[14px] font-mono font-medium uppercase tracking-wider ${color}`}>
       <span className="size-1.5 rounded-full bg-current" />
       {label}
     </span>
@@ -251,7 +251,7 @@ function TextInput({ value, onChange, placeholder, password, mono }: {
         value={value ?? ""}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`flex-1 bg-[#010409] border border-[#30363d] rounded px-3 py-2 text-[15px] text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#58a6ff] transition-colors ${mono ? "font-mono" : ""}`}
+        className={`flex-1 bg-[#010409] border border-[#30363d] rounded px-3 py-2 text-[16px] text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#58a6ff] transition-colors ${mono ? "font-mono" : ""}`}
       />
       {password && (
         <button type="button" onClick={() => setShow(s => !s)}
@@ -275,7 +275,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[150px_1fr] items-start gap-3">
-      <label className="font-mono text-[14px] text-[#8b949e] text-right pt-2">{label}</label>
+      <label className="font-mono text-[15px] text-[#8b949e] text-right pt-2">{label}</label>
       <div>{children}</div>
     </div>
   );
@@ -391,17 +391,17 @@ function EncryptionKeySection() {
 
   return (
     <div className="px-4 py-3 border-t border-[#21262d]">
-      <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center gap-1.5">
+      <p className="font-mono text-[14px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center gap-1.5">
         <KeyRound size={12} /> Encryption Key
       </p>
-      <p className="font-mono text-[11px] text-[#484f58] mb-2 leading-relaxed">
+      <p className="font-mono text-[12px] text-[#484f58] mb-2 leading-relaxed">
         Encrypts every stored device password, API key, and username at rest.
         Back this up somewhere safe — without it, stored credentials cannot be recovered.
       </p>
 
       <div className="flex items-center gap-1.5 mb-2">
         <input readOnly value={reveal ? (key ?? "loading…") : "•".repeat(24)}
-          className="flex-1 min-w-0 bg-[#010409] border border-[#30363d] rounded px-3 py-2 font-mono text-[13px] text-[#e6edf3] truncate" />
+          className="flex-1 min-w-0 bg-[#010409] border border-[#30363d] rounded px-3 py-2 font-mono text-[14px] text-[#e6edf3] truncate" />
         <button onClick={() => setReveal(r => !r)} title={reveal ? "Hide key" : "Reveal key"}
           className="p-2 rounded border border-[#30363d] text-[#484f58] hover:text-[#8b949e] shrink-0">
           {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -416,24 +416,24 @@ function EncryptionKeySection() {
 
       <div className="flex gap-2 mb-2">
         <button onClick={rotate} disabled={busy}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[13px] transition-all duration-500 disabled:opacity-40 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[14px] transition-all duration-500 disabled:opacity-40 ${
             rotateFlash ? FLASH_GREEN : "border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e]"
           }`}>
           <RefreshCw size={11} className={busy ? "animate-spin" : ""} /> Rotate
         </button>
         <button onClick={() => setShowRestore(s => !s)} disabled={busy}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border border-[#30363d] font-mono text-[13px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 transition-colors">
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border border-[#30363d] font-mono text-[14px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 transition-colors">
           <Upload size={11} /> Restore / Set Key
         </button>
       </div>
 
       {msg && (
-        <p className={`font-mono text-[12px] mb-2 ${msg.ok ? "text-[#39d353]" : "text-[#f85149]"}`}>{msg.text}</p>
+        <p className={`font-mono text-[13px] mb-2 ${msg.ok ? "text-[#39d353]" : "text-[#f85149]"}`}>{msg.text}</p>
       )}
 
       {showRestore && (
         <div className="mt-1 p-3 rounded border border-[#30363d] bg-[#010409] flex flex-col gap-2">
-          <p className="font-mono text-[11px] text-[#484f58]">
+          <p className="font-mono text-[12px] text-[#484f58]">
             Paste a previously backed-up key. If it matches your current data, it's restored with
             nothing lost. If it doesn't match, this becomes a destructive reset.
           </p>
@@ -444,11 +444,11 @@ function EncryptionKeySection() {
 
           {needsForce && (
             <div className="p-2 rounded border border-[#f85149]/40 bg-[#f85149]/10 flex flex-col gap-1.5">
-              <p className="font-mono text-[12px] text-[#f85149] leading-relaxed">
+              <p className="font-mono text-[13px] text-[#f85149] leading-relaxed">
                 This key does NOT match your current stored credentials. Continuing will permanently
                 discard every device password, API key, and username on file. This cannot be undone.
               </p>
-              <p className="font-mono text-[11px] text-[#8b949e]">
+              <p className="font-mono text-[12px] text-[#8b949e]">
                 Type <span className="text-[#e6edf3] font-semibold">NO RECOVERY</span> to confirm:
               </p>
               <TextInput value={noRecoveryText} onChange={setNoRecoveryText} mono placeholder="NO RECOVERY" />
@@ -459,7 +459,7 @@ function EncryptionKeySection() {
             <button
               onClick={handleRestoreSubmit}
               disabled={busy || !pasteKey || pasteKey !== pasteKeyConfirm || (needsForce && noRecoveryText !== "NO RECOVERY")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[13px] transition-all duration-500 disabled:opacity-40 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[14px] transition-all duration-500 disabled:opacity-40 ${
                 setKeyFlash
                   ? FLASH_GREEN
                   : needsForce
@@ -471,7 +471,7 @@ function EncryptionKeySection() {
               {setKeyFlash ? "Saved" : needsForce ? "Replace key — data will be lost" : "Set Key"}
             </button>
             <button onClick={resetRestoreForm}
-              className="px-3 py-1.5 rounded border border-[#30363d] font-mono text-[13px] text-[#8b949e] hover:text-[#c9d1d9]">
+              className="px-3 py-1.5 rounded border border-[#30363d] font-mono text-[14px] text-[#8b949e] hover:text-[#c9d1d9]">
               Cancel
             </button>
           </div>
@@ -530,8 +530,8 @@ function SettingsPanel({
     <div ref={ref} className="absolute right-0 top-full mt-2 w-80 max-h-[85vh] overflow-y-auto bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl z-50">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#21262d]">
         <span className="flex items-baseline gap-2">
-          <span className="font-mono text-[15px] font-semibold text-[#e6edf3]">Settings</span>
-          <span className="font-mono text-[12px] font-semibold text-[#39d353] tracking-widest">
+          <span className="font-mono text-[16px] font-semibold text-[#e6edf3]">Settings</span>
+          <span className="font-mono text-[13px] font-semibold text-[#39d353] tracking-widest">
             v{appVersion ?? APP_VERSION_FALLBACK}
           </span>
         </span>
@@ -540,7 +540,7 @@ function SettingsPanel({
 
       {/* Background color */}
       <div className="px-4 py-3 border-b border-[#21262d]">
-        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2">Background Color</p>
+        <p className="font-mono text-[14px] uppercase tracking-widest text-[#484f58] mb-2">Background Color</p>
         <div className="flex flex-wrap gap-2 mb-2">
           {BG_PRESETS.map(p => (
             <button key={p.value} onClick={() => onBgColor(p.value)}
@@ -553,26 +553,26 @@ function SettingsPanel({
         <div className="flex items-center gap-2">
           <input type="color" value={bgColor} onChange={e => onBgColor(e.target.value)}
             className="w-8 h-8 rounded border border-[#30363d] bg-transparent cursor-pointer" />
-          <span className="font-mono text-[14px] text-[#484f58]">{bgColor}</span>
+          <span className="font-mono text-[15px] text-[#484f58]">{bgColor}</span>
         </div>
       </div>
 
       {/* Certificate paths */}
       <div className="px-4 py-3">
-        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2">Certificate Files</p>
+        <p className="font-mono text-[14px] uppercase tracking-widest text-[#484f58] mb-2">Certificate Files</p>
         <div className="flex flex-col gap-2 mb-3">
           <div>
-            <label className="font-mono text-[13px] text-[#8b949e] block mb-1">Cert / fullchain</label>
+            <label className="font-mono text-[14px] text-[#8b949e] block mb-1">Cert / fullchain</label>
             <TextInput value={localCert} onChange={setLocalCert} placeholder={DEFAULT_CERT_PATH} mono />
           </div>
           <div>
-            <label className="font-mono text-[13px] text-[#8b949e] block mb-1">Private key</label>
+            <label className="font-mono text-[14px] text-[#8b949e] block mb-1">Private key</label>
             <TextInput value={localKey} onChange={setLocalKey} placeholder={DEFAULT_KEY_PATH} mono />
           </div>
         </div>
         <button
           onClick={doSavePaths}
-          className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[14px] transition-all duration-500 ${
+          className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded border font-mono text-[15px] transition-all duration-500 ${
             savingPaths === "ok" ? FLASH_GREEN
               : savingPaths === "error" ? "border-[#f85149]/60 bg-[#f85149]/20 text-[#f85149]"
               : "border-[#238636]/60 bg-[#238636]/20 text-[#39d353] hover:bg-[#238636]/30"
@@ -585,11 +585,11 @@ function SettingsPanel({
 
       {/* Auto-deploy on renewal */}
       <div className="px-4 py-3 border-t border-[#21262d]">
-        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2">Automation</p>
+        <p className="font-mono text-[14px] uppercase tracking-widest text-[#484f58] mb-2">Automation</p>
         <label className="flex items-center justify-between gap-3 cursor-pointer group">
           <div>
-            <p className="font-mono text-[13px] text-[#e6edf3]">Auto-deploy on renewal</p>
-            <p className="font-mono text-[11px] text-[#484f58] mt-0.5">Deploy all devices when the cert serial changes. Runs server-side, so it works even with this dashboard closed. Automatically paused if a Let's Encrypt staging/test certificate is detected.</p>
+            <p className="font-mono text-[14px] text-[#e6edf3]">Auto-deploy on renewal</p>
+            <p className="font-mono text-[12px] text-[#484f58] mt-0.5">Deploy all devices when the cert serial changes. Runs server-side, so it works even with this dashboard closed. Automatically paused if a Let's Encrypt staging/test certificate is detected.</p>
           </div>
           <button
             onClick={() => onAutoDeployToggle(!autoDeployOnRenewal)}
@@ -602,17 +602,17 @@ function SettingsPanel({
 
       {/* Polling interval */}
       <div className="px-4 py-3 border-t border-[#21262d]">
-        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center justify-between">
+        <p className="font-mono text-[14px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center justify-between">
           <span>Polling Interval</span>
           {savingPoll === "ok" && <span className="text-[#39d353] normal-case tracking-normal flex items-center gap-1"><CheckCircle2 size={11} /> Saved</span>}
           {savingPoll === "error" && <span className="text-[#f85149] normal-case tracking-normal flex items-center gap-1"><AlertCircle size={11} /> Save failed</span>}
         </p>
-        <p className="font-mono text-[11px] text-[#484f58] mb-2">
+        <p className="font-mono text-[12px] text-[#484f58] mb-2">
           How often the dashboard re-checks the local cert and device status.
         </p>
         <div className="relative">
           <select value={pollIntervalMs} onChange={e => doPollIntervalChange(parseInt(e.target.value))}
-            className={`w-full appearance-none bg-[#010409] border rounded px-3 py-2 font-mono text-[14px] text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] transition-all duration-500 pr-8 ${
+            className={`w-full appearance-none bg-[#010409] border rounded px-3 py-2 font-mono text-[15px] text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] transition-all duration-500 pr-8 ${
               savingPoll === "ok" ? "border-[#39d353]" : savingPoll === "error" ? "border-[#f85149]" : "border-[#30363d]"
             }`}>
             {POLL_INTERVALS.map(p => (
@@ -625,13 +625,13 @@ function SettingsPanel({
 
       {/* HA notifications */}
       <div className="px-4 py-3 border-t border-[#21262d]">
-        <p className="font-mono text-[13px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center gap-1.5">
+        <p className="font-mono text-[14px] uppercase tracking-widest text-[#484f58] mb-2 flex items-center gap-1.5">
           <Bell size={12} /> Notifications
         </p>
         <label className="flex items-center justify-between gap-3 cursor-pointer group">
           <div>
-            <p className="font-mono text-[13px] text-[#e6edf3]">Home Assistant notifications</p>
-            <p className="font-mono text-[11px] text-[#484f58] mt-0.5">
+            <p className="font-mono text-[14px] text-[#e6edf3]">Home Assistant notifications</p>
+            <p className="font-mono text-[12px] text-[#484f58] mt-0.5">
               Notify on auto-triggered deploy results and persistent cert-read failures
             </p>
           </div>
@@ -709,7 +709,7 @@ function DeviceModal({
       <div className="w-full max-w-lg bg-[#0d1117] border border-[#30363d] rounded-lg shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#21262d]">
-          <span className="font-mono text-[16px] font-semibold text-[#e6edf3]">
+          <span className="font-mono text-[17px] font-semibold text-[#e6edf3]">
             {isNew ? "Add Device" : `Edit — ${initial?.name}`}
           </span>
           <button onClick={onClose} className="text-[#484f58] hover:text-[#c9d1d9]"><X size={16} /></button>
@@ -721,7 +721,7 @@ function DeviceModal({
           <FieldRow label="Device type">
             <div className="relative">
               <select value={dev.type} onChange={e => set("type", e.target.value as DeviceType)}
-                className="w-full appearance-none bg-[#010409] border border-[#30363d] rounded px-3 py-2 font-mono text-[15px] text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] transition-colors pr-8">
+                className="w-full appearance-none bg-[#010409] border border-[#30363d] rounded px-3 py-2 font-mono text-[16px] text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] transition-colors pr-8">
                 {DEVICE_TYPES.map(dt => (
                   <option key={dt.value} value={dt.value}>{dt.icon}  {dt.label}</option>
                 ))}
@@ -742,19 +742,19 @@ function DeviceModal({
               <TextInput value={dev.host} onChange={v => { set("host", v); setConnectResult(null); setHostError(null); }}
                 placeholder="192.168.1.10 or device.example.com" mono />
               {hostError && (
-                <span className="font-mono text-[13px] text-[#f85149] flex items-center gap-1">
+                <span className="font-mono text-[14px] text-[#f85149] flex items-center gap-1">
                   <AlertCircle size={11} /> {hostError}
                 </span>
               )}
               {/* Test connection */}
               <div className="flex items-center gap-2">
                 <button onClick={testConnection} disabled={!dev.host.trim() || connecting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#30363d] font-mono text-[14px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#30363d] font-mono text-[15px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   {connecting ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
                   Test Connection
                 </button>
                 {connectResult && (
-                  <span className={`font-mono text-[14px] ${connectResult.ok ? "text-[#39d353]" : "text-[#f85149]"}`}>
+                  <span className={`font-mono text-[15px] ${connectResult.ok ? "text-[#39d353]" : "text-[#f85149]"}`}>
                     {connectResult.ok ? "✓" : "✗"} {connectResult.message}
                   </span>
                 )}
@@ -765,7 +765,7 @@ function DeviceModal({
           <FieldRow label="Enabled">
             <div className="flex items-center gap-2 pt-1">
               <Toggle checked={dev.enabled} onChange={v => set("enabled", v)} />
-              <span className="font-mono text-[14px] text-[#484f58]">{dev.enabled ? "Active" : "Disabled"}</span>
+              <span className="font-mono text-[15px] text-[#484f58]">{dev.enabled ? "Active" : "Disabled"}</span>
             </div>
           </FieldRow>
 
@@ -776,7 +776,7 @@ function DeviceModal({
               <TextInput value={dev.username ?? ""} onChange={v => set("username", v)} mono={dev.type === "proxmox"}
                 placeholder={dev.type === "proxmox" ? "root@pam!CertFleetAuth" : "admin"} />
               {dev.type === "proxmox" && (
-                <p className="font-mono text-[11px] text-[#484f58] mt-1">
+                <p className="font-mono text-[12px] text-[#484f58] mt-1">
                   Full token ID from Datacenter → Permissions → API Tokens (user@realm!tokenname).
                 </p>
               )}
@@ -792,7 +792,7 @@ function DeviceModal({
               <TextInput value={dev.api_key ?? ""} onChange={v => set("api_key", v)} password
                 placeholder={dev.type === "comware" ? "foes-bent-pile-atom-ship" : dev.type === "truenas" ? "TrueNAS API key" : dev.type === "proxmox" ? "Token secret (UUID)" : "API key"} />
               {dev.type === "comware" && (
-                <p className="font-mono text-[11px] text-[#484f58] mt-1">
+                <p className="font-mono text-[12px] text-[#484f58] mt-1">
                   Default XTD-mode password: <span className="text-[#8b949e]">foes-bent-pile-atom-ship</span>
                 </p>
               )}
@@ -810,7 +810,7 @@ function DeviceModal({
               <TextInput value={dev.site_id ?? ""} onChange={v => set("site_id", v)} mono
                 placeholder={dev.type === "proxmox" ? "proxmoxdemo" : "Default"} />
               {dev.type === "proxmox" && (
-                <p className="font-mono text-[11px] text-[#484f58] mt-1">
+                <p className="font-mono text-[12px] text-[#484f58] mt-1">
                   The short node name as registered in the cluster — not the FQDN. Find it under
                   Datacenter in the Proxmox web UI.
                 </p>
@@ -829,14 +829,14 @@ function DeviceModal({
               <button
                 type="button"
                 onClick={() => setShowAdvanced(v => !v)}
-                className="flex items-center gap-1.5 font-mono text-[12px] text-[#484f58] hover:text-[#8b949e] transition-colors"
+                className="flex items-center gap-1.5 font-mono text-[13px] text-[#484f58] hover:text-[#8b949e] transition-colors"
               >
                 <ChevronDown size={12} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
                 Advanced switch settings
               </button>
               {showAdvanced && (
                 <div className="mt-2 pl-3 border-l border-[#21262d] flex flex-col gap-2">
-                  <p className="font-mono text-[11px] text-[#484f58]">
+                  <p className="font-mono text-[12px] text-[#484f58]">
                     Leave blank to use defaults. Change only if your switch uses non-standard Comware config names.
                   </p>
                   <FieldRow label="PKI domain">
@@ -851,7 +851,7 @@ function DeviceModal({
                     <TextInput value={dev.startup_config_path ?? ""} mono
                       onChange={v => set("startup_config_path", v)}
                       placeholder="flash:/startup.cfg" />
-                    <p className="font-mono text-[11px] text-[#484f58] mt-1">
+                    <p className="font-mono text-[12px] text-[#484f58] mt-1">
                       Run <span className="text-[#8b949e]">display startup</span> on the switch to confirm the filename.
                     </p>
                   </FieldRow>
@@ -880,7 +880,7 @@ function DeviceModal({
             <FieldRow label="Allow upload">
               <div className="flex items-center gap-2 pt-1">
                 <Toggle checked={dev.pfsense_allow_upload ?? false} onChange={v => set("pfsense_allow_upload", v)} />
-                <span className="font-mono text-[14px] text-[#484f58]">
+                <span className="font-mono text-[15px] text-[#484f58]">
                   {dev.pfsense_allow_upload ? "Upload enabled" : "Verify-only (ACME manages renewal)"}
                 </span>
               </div>
@@ -890,7 +890,7 @@ function DeviceModal({
             <FieldRow label="Allow upload">
               <div className="flex items-center gap-2 pt-1">
                 <Toggle checked={dev.proxmox_allow_upload ?? false} onChange={v => set("proxmox_allow_upload", v)} />
-                <span className="font-mono text-[14px] text-[#484f58]">
+                <span className="font-mono text-[15px] text-[#484f58]">
                   {dev.proxmox_allow_upload ? "Upload enabled" : "Verify-only (Proxmox's own ACME client manages renewal)"}
                 </span>
               </div>
@@ -899,7 +899,7 @@ function DeviceModal({
 
           <div className="border-t border-[#21262d]" />
           <FieldRow label="Device ID">
-            <span className="font-mono text-[14px] text-[#30363d] pt-1 block">{dev.id || "(auto)"}</span>
+            <span className="font-mono text-[15px] text-[#30363d] pt-1 block">{dev.id || "(auto)"}</span>
           </FieldRow>
         </div>
 
@@ -910,19 +910,19 @@ function DeviceModal({
             {!isNew && onDelete && (
               deleteConfirm ? (
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[14px] text-[#f85149]">Delete this device?</span>
+                  <span className="font-mono text-[15px] text-[#f85149]">Delete this device?</span>
                   <button onClick={onDelete}
-                    className="px-3 py-1.5 rounded border border-[#f85149]/40 bg-[#f85149]/10 font-mono text-[14px] text-[#f85149] hover:bg-[#f85149]/20 transition-colors">
+                    className="px-3 py-1.5 rounded border border-[#f85149]/40 bg-[#f85149]/10 font-mono text-[15px] text-[#f85149] hover:bg-[#f85149]/20 transition-colors">
                     Yes, delete
                   </button>
                   <button onClick={() => setDeleteConfirm(false)}
-                    className="font-mono text-[14px] text-[#484f58] hover:text-[#8b949e] transition-colors">
+                    className="font-mono text-[15px] text-[#484f58] hover:text-[#8b949e] transition-colors">
                     Cancel
                   </button>
                 </div>
               ) : (
                 <button onClick={() => setDeleteConfirm(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#30363d] font-mono text-[14px] text-[#484f58] hover:text-[#f85149] hover:border-[#f85149]/40 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#30363d] font-mono text-[15px] text-[#484f58] hover:text-[#f85149] hover:border-[#f85149]/40 transition-colors">
                   <Trash2 size={12} /> Delete
                 </button>
               )
@@ -931,11 +931,11 @@ function DeviceModal({
 
           <div className="flex items-center gap-2">
             <button onClick={onClose}
-              className="px-3 py-1.5 rounded border border-[#30363d] font-mono text-[14px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] transition-colors">
+              className="px-3 py-1.5 rounded border border-[#30363d] font-mono text-[15px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] transition-colors">
               Cancel
             </button>
             <button onClick={handleSave} disabled={!dev.name.trim() || !dev.host.trim()}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded border border-[#238636]/60 bg-[#238636]/20 font-mono text-[14px] text-[#39d353] hover:bg-[#238636]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded border border-[#238636]/60 bg-[#238636]/20 font-mono text-[15px] text-[#39d353] hover:bg-[#238636]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
               <Save size={12} />
               {isNew ? "Add Device" : "Save Changes"}
             </button>
@@ -979,8 +979,8 @@ function DeviceCard({ device, localFp, onCheck, onDeploy, onBackup, onEdit, back
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg leading-none">{typeInfo?.icon ?? "📦"}</span>
           <div className="min-w-0">
-            <p className="text-[16px] font-semibold text-[#e6edf3] truncate">{device.name}</p>
-            <p className="font-mono text-[14px] text-[#8b949e] truncate">{device.host}</p>
+            <p className="text-[17px] font-semibold text-[#e6edf3] truncate">{device.name}</p>
+            <p className="font-mono text-[15px] text-[#8b949e] truncate">{device.host}</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -998,64 +998,64 @@ function DeviceCard({ device, localFp, onCheck, onDeploy, onBackup, onEdit, back
       </div>
 
       {device.last_warning && (
-        <div className="rounded border border-[#e3b341]/40 bg-[#e3b341]/10 px-3 py-2 text-[13px] font-mono text-[#e3b341]">
+        <div className="rounded border border-[#e3b341]/40 bg-[#e3b341]/10 px-3 py-2 text-[14px] font-mono text-[#e3b341]">
           <div className="flex items-center gap-1.5 mb-1">
             <AlertCircle size={11} />
-            <span className="text-[14px]">Heads up</span>
+            <span className="text-[15px]">Heads up</span>
           </div>
-          <div className="text-[13px] opacity-90 leading-relaxed">
+          <div className="text-[14px] opacity-90 leading-relaxed">
             {device.last_warning}
           </div>
         </div>
       )}
 
       {hasFp && (
-        <div className={`rounded border px-3 py-2 text-[13px] font-mono ${inSync ? "border-[#39d353]/20 bg-[#39d353]/5 text-[#39d353]" : "border-[#e3b341]/20 bg-[#e3b341]/5 text-[#e3b341]"}`}>
+        <div className={`rounded border px-3 py-2 text-[14px] font-mono ${inSync ? "border-[#39d353]/20 bg-[#39d353]/5 text-[#39d353]" : "border-[#e3b341]/20 bg-[#e3b341]/5 text-[#e3b341]"}`}>
           <div className="flex items-center gap-1.5 mb-1">
             {inSync ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
-            <span className="text-[14px]">{inSync ? "Fingerprint match" : "Fingerprint mismatch"}</span>
+            <span className="text-[15px]">{inSync ? "Fingerprint match" : "Fingerprint mismatch"}</span>
           </div>
-          <div className="text-[13px] opacity-80 leading-relaxed" title={device.live_fingerprint ?? undefined}>
+          <div className="text-[14px] opacity-80 leading-relaxed" title={device.live_fingerprint ?? undefined}>
             {shortFp(device.live_fingerprint ?? "")}
           </div>
         </div>
       )}
       {!hasFp && device.live_fingerprint && device.last_status === "no_local_cert" && (
-        <div className="rounded border border-[#58a6ff]/20 bg-[#58a6ff]/5 px-3 py-2 text-[13px] font-mono text-[#58a6ff]">
+        <div className="rounded border border-[#58a6ff]/20 bg-[#58a6ff]/5 px-3 py-2 text-[14px] font-mono text-[#58a6ff]">
           <div className="flex items-center gap-1.5 mb-1">
             <Shield size={11} />
-            <span className="text-[14px]">Device's current certificate</span>
+            <span className="text-[15px]">Device's current certificate</span>
           </div>
-          <div className="text-[13px] opacity-80 leading-relaxed" title={device.live_fingerprint}>
+          <div className="text-[14px] opacity-80 leading-relaxed" title={device.live_fingerprint}>
             {shortFp(device.live_fingerprint)}
           </div>
         </div>
       )}
 
       {device.last_message && (
-        <p className={`text-[14px] leading-5 ${statusColor(device.last_status)}`}>{device.last_message}</p>
+        <p className={`text-[15px] leading-5 ${statusColor(device.last_status)}`}>{device.last_message}</p>
       )}
       {device.last_run && (
-        <p className="text-[13px] font-mono text-[#39d353]">
+        <p className="text-[14px] font-mono text-[#39d353]">
           {formatLocalTime(device.last_run)}
         </p>
       )}
       {hasUploadGate && (
-        <p className="text-[13px] text-[#8b949e] font-mono">
+        <p className="text-[14px] text-[#8b949e] font-mono">
           {uploadAllowed ? "Upload enabled" : `Verify-only (${acmeLabel})`}
         </p>
       )}
 
       <div className="flex gap-2 mt-auto pt-1">
         <button onClick={onCheck} disabled={device.running || !device.enabled}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded border border-[#30363d] bg-[#161b27] text-[14px] font-mono text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded border border-[#30363d] bg-[#161b27] text-[15px] font-mono text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
           {device.running ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
           Verify
         </button>
         <button onClick={onDeploy}
           disabled={device.running || !device.enabled || (hasUploadGate && !uploadAllowed)}
           title={hasUploadGate && !uploadAllowed ? "Allow upload must be enabled in the device editor" : undefined}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded border text-[14px] font-mono disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${hasUploadGate && !uploadAllowed ? "border-[#30363d] bg-transparent text-[#30363d]" : "border-[#39d353]/30 bg-[#39d353]/10 text-[#39d353] hover:bg-[#39d353]/20"}`}>
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded border text-[15px] font-mono disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${hasUploadGate && !uploadAllowed ? "border-[#30363d] bg-transparent text-[#30363d]" : "border-[#39d353]/30 bg-[#39d353]/10 text-[#39d353] hover:bg-[#39d353]/20"}`}>
           {device.running ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
           {hasUploadGate && !uploadAllowed ? "ACME" : "Deploy"}
         </button>
@@ -1065,19 +1065,19 @@ function DeviceCard({ device, localFp, onCheck, onDeploy, onBackup, onEdit, back
         <div className="flex gap-2 pt-1 border-t border-[#21262d]">
           <button onClick={onBackup}
             disabled={device.running || !device.enabled || backupState?.status === "running"}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded border border-[#6e40c9]/30 bg-[#6e40c9]/10 text-[14px] font-mono text-[#a371f7] hover:bg-[#6e40c9]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded border border-[#6e40c9]/30 bg-[#6e40c9]/10 text-[15px] font-mono text-[#a371f7] hover:bg-[#6e40c9]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
             {backupState?.status === "running" ? <Loader2 size={12} className="animate-spin" /> : <HardDrive size={12} />}
             {backupState?.status === "running" ? "Backing up…" : "Backup Config"}
           </button>
           {backupState?.status === "done" && backupState.filename && (
             <a href={`./api/devices/${device.id}/backup/latest`} download={backupState.filename}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded border border-[#6e40c9]/30 bg-[#6e40c9]/10 text-[14px] font-mono text-[#a371f7] hover:bg-[#6e40c9]/20 transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded border border-[#6e40c9]/30 bg-[#6e40c9]/10 text-[15px] font-mono text-[#a371f7] hover:bg-[#6e40c9]/20 transition-colors"
               title={`Download ${backupState.filename}`}>
               <Download size={12} />
             </a>
           )}
           {backupState?.status === "error" && (
-            <span className="flex items-center text-[13px] font-mono text-[#f85149]" title={backupState.error}>
+            <span className="flex items-center text-[14px] font-mono text-[#f85149]" title={backupState.error}>
               <AlertCircle size={11} className="mr-1" /> Failed
             </span>
           )}
@@ -1377,20 +1377,24 @@ export default function App() {
       <header className="border-b border-[#21262d] bg-[#0a0e14]/95 backdrop-blur sticky top-0 z-10">
         <div className="max-w-[1600px] mx-auto px-6 h-12 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Shield size={15} className="text-[#39d353]" />
-            <span className="font-mono text-[16px] font-semibold text-[#e6edf3]">CertFleet</span>
-            <span className="hidden sm:inline text-[#30363d] text-lg">|</span>
-            <span className="hidden sm:inline font-mono text-[14px] text-[#8b949e]">Let's Encrypt → All Devices</span>
+            <span className="hidden sm:inline font-mono text-[15px] text-[#8b949e]">Let's Encrypt</span>
+            <span className="hidden sm:inline text-[#30363d] text-lg">→</span>
+            <div className="flex items-center gap-2">
+              <img src="./favicon-64.png" alt="" className="w-[18px] h-[18px]" />
+              <span className="font-mono text-[17px] font-semibold text-[#e6edf3]">CertFleet</span>
+            </div>
+            <span className="hidden sm:inline text-[#30363d] text-lg">→</span>
+            <span className="hidden sm:inline font-mono text-[15px] text-[#8b949e]">All Devices</span>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[12px] text-[#484f58] tracking-widest">v{appVersion ?? APP_VERSION_FALLBACK}</span>
+              <span className="font-mono text-[13px] text-[#484f58] tracking-widest">v{appVersion ?? APP_VERSION_FALLBACK}</span>
               {updateAvailable && (
                 <a
                   href="/hassio/addon/certfleet/info"
                   target="_parent"
                   title={latestVersion ? `v${latestVersion} available` : "Update available"}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold bg-[#9e6a03]/20 border border-[#9e6a03]/40 text-[#e3b341] hover:bg-[#9e6a03]/30 transition-colors"
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12px] font-mono font-semibold bg-[#9e6a03]/20 border border-[#9e6a03]/40 text-[#e3b341] hover:bg-[#9e6a03]/30 transition-colors"
                 >
                   <Zap size={10} />
                   {latestVersion ? `v${latestVersion}` : "Update"}
@@ -1398,14 +1402,14 @@ export default function App() {
               )}
             </div>
             {devices.length > 0 && (
-              <div className="hidden md:flex items-center gap-3 font-mono text-[14px]">
+              <div className="hidden md:flex items-center gap-3 font-mono text-[15px]">
                 <span className="text-[#39d353]">{syncedCount}/{devices.length} in sync</span>
                 {errorCount > 0 && <span className="text-[#f85149]">{errorCount} error{errorCount > 1 ? "s" : ""}</span>}
               </div>
             )}
             <button onClick={() => setPolling(p => !p)}
               title={polling ? "Click to pause polling" : "Click to resume polling"}
-              className={`flex items-center gap-1.5 text-[14px] font-mono transition-colors ${polling ? "text-[#39d353] hover:text-[#39d353]/70" : "text-[#8b949e] hover:text-[#c9d1d9]"}`}>
+              className={`flex items-center gap-1.5 text-[15px] font-mono transition-colors ${polling ? "text-[#39d353] hover:text-[#39d353]/70" : "text-[#8b949e] hover:text-[#c9d1d9]"}`}>
               {polling
                 ? <Wifi size={13} className={`transition-transform duration-300 ${pollTickFlash ? "scale-125" : "scale-100"}`} />
                 : <WifiOff size={13} />}
@@ -1441,9 +1445,9 @@ export default function App() {
           <section className="rounded border border-[#f85149]/30 bg-[#f85149]/10 p-4 flex items-start gap-3">
             <FileWarning size={18} className="text-[#f85149] shrink-0 mt-0.5" />
             <div>
-              <p className="text-[15px] font-semibold text-[#f85149] mb-1">Device configuration is unreadable</p>
-              <p className="font-mono text-[13px] text-[#c9d1d9] leading-relaxed">{configError}</p>
-              <p className="font-mono text-[13px] text-[#484f58] mt-1">
+              <p className="text-[16px] font-semibold text-[#f85149] mb-1">Device configuration is unreadable</p>
+              <p className="font-mono text-[14px] text-[#c9d1d9] leading-relaxed">{configError}</p>
+              <p className="font-mono text-[14px] text-[#484f58] mt-1">
                 Open <button onClick={() => setShowSettings(true)} className="text-[#58a6ff] hover:underline">Settings → Encryption Key</button> to restore or reset the key.
               </p>
             </div>
@@ -1457,7 +1461,7 @@ export default function App() {
               /* No cert + no devices: soft placeholder — Getting Started below has the details */
               <div className="flex items-center gap-3 text-[#484f58]">
                 <FolderOpen size={18} />
-                <span className="font-mono text-[14px]">No certificate loaded — follow the steps below to get started.</span>
+                <span className="font-mono text-[15px]">No certificate loaded — follow the steps below to get started.</span>
                 <button onClick={handleRefreshCert} title="Check again"
                   className={`ml-auto p-1.5 rounded border transition-all duration-500 ${certFlash ? "border-[#39d353] bg-[#39d353]/20 text-[#39d353]" : "border-[#30363d] text-[#484f58] hover:text-[#c9d1d9] hover:border-[#8b949e]"}`}>
                   <RefreshCw size={13} className={certFlash ? "animate-spin" : ""} />
@@ -1470,9 +1474,9 @@ export default function App() {
                   <FileWarning size={20} className="text-[#f85149]" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[16px] font-semibold text-[#f85149] mb-1">Certificate file error</p>
-                  <p className="font-mono text-[14px] text-[#c9d1d9] whitespace-pre-wrap leading-relaxed">{certError}</p>
-                  <p className="font-mono text-[14px] text-[#484f58] mt-2">
+                  <p className="text-[17px] font-semibold text-[#f85149] mb-1">Certificate file error</p>
+                  <p className="font-mono text-[15px] text-[#c9d1d9] whitespace-pre-wrap leading-relaxed">{certError}</p>
+                  <p className="font-mono text-[15px] text-[#484f58] mt-2">
                     Check the cert paths in <button onClick={() => setShowSettings(true)} className="text-[#58a6ff] hover:underline">Settings</button>.
                   </p>
                 </div>
@@ -1490,9 +1494,9 @@ export default function App() {
                 </div>
                 <div>
                   <div className="flex items-center gap-3 mb-0.5 flex-wrap">
-                    <span className="text-[17px] font-semibold text-[#e6edf3]">{cert?.domain ?? "Loading…"}</span>
+                    <span className="text-[18px] font-semibold text-[#e6edf3]">{cert?.domain ?? "Loading…"}</span>
                     {cert && (
-                      <span className={`font-mono text-[14px] font-medium ${certDayColor(certDays)}`}>
+                      <span className={`font-mono text-[15px] font-medium ${certDayColor(certDays)}`}>
                         {certDays} days remaining
                       </span>
                     )}
@@ -1500,11 +1504,11 @@ export default function App() {
                   {cert && (
                     <>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
-                        <span className={`font-mono text-[14px] ${cert.is_staging ? "text-[#e3b341]" : "text-[#8b949e]"}`}>Issuer: {cert.issuer}</span>
-                        <span className="font-mono text-[14px] text-[#8b949e]">Expires {cert.not_after.substring(0, 10)}</span>
+                        <span className={`font-mono text-[15px] ${cert.is_staging ? "text-[#e3b341]" : "text-[#8b949e]"}`}>Issuer: {cert.issuer}</span>
+                        <span className="font-mono text-[15px] text-[#8b949e]">Expires {cert.not_after.substring(0, 10)}</span>
                       </div>
                       {/* Full fingerprint */}
-                      <div className="font-mono text-[13px] text-[#39d353]/70 mt-1.5 break-all leading-relaxed max-w-xl">
+                      <div className="font-mono text-[14px] text-[#39d353]/70 mt-1.5 break-all leading-relaxed max-w-xl">
                         {cert.fingerprint}
                       </div>
                     </>
@@ -1520,12 +1524,12 @@ export default function App() {
                     <RefreshCw size={13} className={certFlash ? "animate-spin" : ""} />
                   </button>
                   <button onClick={verifyAll} disabled={verifyingAll || deployingAll || devices.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 rounded border border-[#58a6ff]/40 bg-[#58a6ff]/10 text-[15px] font-mono font-medium text-[#58a6ff] hover:bg-[#58a6ff]/20 hover:border-[#58a6ff]/60 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                    className="flex items-center gap-2 px-4 py-2 rounded border border-[#58a6ff]/40 bg-[#58a6ff]/10 text-[16px] font-mono font-medium text-[#58a6ff] hover:bg-[#58a6ff]/20 hover:border-[#58a6ff]/60 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                     {verifyingAll ? <Loader2 size={13} className="animate-spin" /> : <Activity size={13} />}
                     Verify All
                   </button>
                   <button onClick={deployAll} disabled={deployingAll || verifyingAll || devices.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 rounded border border-[#39d353]/40 bg-[#39d353]/15 text-[15px] font-mono font-medium text-[#39d353] hover:bg-[#39d353]/25 hover:border-[#39d353]/60 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                    className="flex items-center gap-2 px-4 py-2 rounded border border-[#39d353]/40 bg-[#39d353]/15 text-[16px] font-mono font-medium text-[#39d353] hover:bg-[#39d353]/25 hover:border-[#39d353]/60 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                     {deployingAll ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
                     Deploy All
                   </button>
@@ -1535,7 +1539,7 @@ export default function App() {
           )}
 
           {cert && !certError && cert.is_staging && (
-            <div className={`mt-4 rounded border px-3 py-2.5 text-[13px] font-mono ${
+            <div className={`mt-4 rounded border px-3 py-2.5 text-[14px] font-mono ${
               stagingDangerous
                 ? "border-[#f85149]/40 bg-[#f85149]/10 text-[#f85149]"
                 : "border-[#e3b341]/40 bg-[#e3b341]/10 text-[#e3b341]"
@@ -1549,7 +1553,7 @@ export default function App() {
                 <span className="font-semibold">{cert.cert_path}</span>.
                 {stagingDangerous
                   ? " Auto-deploy is paused until a valid certificate is issued — no device will receive this certificate automatically."
-                  : " This certificate will not be trusted by browsers or devices — nothing will auto-deploy while auto-deploy stays off."}
+                  : " This certificate will not be trusted by browsers or devices — auto-deploy is temporarily disabled."}
               </div>
             </div>
           )}
@@ -1568,19 +1572,19 @@ export default function App() {
                   { label: "Cert file",  value: cert.cert_path, mono: true },
                 ].map(({ label, value, mono }) => (
                   <div key={label}>
-                    <p className="font-mono text-[13px] text-[#484f58] uppercase tracking-wider mb-0.5">{label}</p>
-                    <p className={`text-[14px] truncate ${mono ? "font-mono" : ""} ${label === "Root CA" && cert.is_staging ? "text-[#e3b341]" : "text-[#39d353]"}`} title={value}>{value}</p>
+                    <p className="font-mono text-[14px] text-[#484f58] uppercase tracking-wider mb-0.5">{label}</p>
+                    <p className={`text-[15px] truncate ${mono ? "font-mono" : ""} ${label === "Root CA" && cert.is_staging ? "text-[#e3b341]" : "text-[#39d353]"}`} title={value}>{value}</p>
                   </div>
                 ))}
               </div>
               {cert.sans.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-[#21262d]">
-                  <p className="font-mono text-[13px] text-[#484f58] uppercase tracking-wider mb-1">
+                  <p className="font-mono text-[14px] text-[#484f58] uppercase tracking-wider mb-1">
                     Subject Alternative Names ({cert.sans.length})
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {cert.sans.map(san => (
-                      <span key={san} className="font-mono text-[13px] text-[#39d353] bg-[#39d353]/5 border border-[#39d353]/20 rounded px-2 py-0.5">
+                      <span key={san} className="font-mono text-[14px] text-[#39d353] bg-[#39d353]/5 border border-[#39d353]/20 rounded px-2 py-0.5">
                         {san}
                       </span>
                     ))}
@@ -1595,11 +1599,11 @@ export default function App() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[13px] uppercase tracking-[0.15em] text-[#484f58]">Devices</span>
-              <span className="font-mono text-[13px] text-[#30363d]">{devices.length}</span>
+              <span className="font-mono text-[14px] uppercase tracking-[0.15em] text-[#484f58]">Devices</span>
+              <span className="font-mono text-[14px] text-[#30363d]">{devices.length}</span>
             </div>
             <button onClick={() => { setEditingDevice(undefined); setShowModal(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#30363d] font-mono text-[14px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] transition-colors">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#30363d] font-mono text-[15px] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e] transition-colors">
               <Plus size={12} /> Add Device
             </button>
           </div>
@@ -1608,32 +1612,32 @@ export default function App() {
             <div className="rounded border border-[#21262d] bg-card p-6 flex flex-col gap-5">
               <div className="flex items-center gap-2">
                 <Shield size={15} className="text-[#39d353]" />
-                <span className="font-mono text-[15px] font-semibold text-[#e6edf3]">Getting Started</span>
+                <span className="font-mono text-[16px] font-semibold text-[#e6edf3]">Getting Started</span>
               </div>
 
               {/* Step 1 — cert */}
               <div className="flex gap-3">
-                <div className={`mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${cert ? "bg-[#39d353]/15 text-[#39d353]" : "bg-[#f85149]/15 text-[#f85149]"}`}>
+                <div className={`mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-bold ${cert ? "bg-[#39d353]/15 text-[#39d353]" : "bg-[#f85149]/15 text-[#f85149]"}`}>
                   {cert ? "✓" : "!"}
                 </div>
                 <div>
-                  <p className="font-mono text-[14px] text-[#e6edf3] mb-0.5">{cert ? "Certificate detected" : "Install Let's Encrypt"}</p>
+                  <p className="font-mono text-[15px] text-[#e6edf3] mb-0.5">{cert ? "Certificate detected" : "Install Let's Encrypt"}</p>
                   {cert
-                    ? <p className="font-mono text-[13px] text-[#8b949e]">{cert.domain} — {cert.days_remaining} days remaining</p>
-                    : <p className="font-mono text-[13px] text-[#f85149]">No cert found at <span className="text-[#e6edf3]">/ssl/fullchain.pem</span>. Ensure Let's Encrypt is configured in Home Assistant.</p>
+                    ? <p className="font-mono text-[14px] text-[#8b949e]">{cert.domain} — {cert.days_remaining} days remaining</p>
+                    : <p className="font-mono text-[14px] text-[#f85149]">No cert found at <span className="text-[#e6edf3]">{certPath}</span>. Ensure Let's Encrypt is configured in Home Assistant.</p>
                   }
                 </div>
               </div>
 
               {/* Step 2 — add devices */}
               <div className="flex gap-3">
-                <div className="mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold bg-[#1f6feb]/15 text-[#1f6feb]">2</div>
+                <div className="mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-bold bg-[#1f6feb]/15 text-[#1f6feb]">2</div>
                 <div>
-                  <p className="font-mono text-[14px] text-[#e6edf3] mb-0.5">Add your devices</p>
-                  <p className="font-mono text-[13px] text-[#8b949e] mb-2">Click <span className="text-[#e6edf3]">+ Add Device</span> above for each device that needs your certificate. Supported types:</p>
+                  <p className="font-mono text-[15px] text-[#e6edf3] mb-0.5">Add your devices</p>
+                  <p className="font-mono text-[14px] text-[#8b949e] mb-2">Click <span className="text-[#e6edf3]">+ Add Device</span> above for each device that needs your certificate. Supported types:</p>
                   <div className="flex flex-wrap gap-2">
                     {DEVICE_TYPES.map(dt => (
-                      <span key={dt.value} className="font-mono text-[13px] px-2 py-0.5 rounded border border-[#30363d] text-[#8b949e]">{dt.icon} {dt.label}</span>
+                      <span key={dt.value} className="font-mono text-[14px] px-2 py-0.5 rounded border border-[#30363d] text-[#8b949e]">{dt.icon} {dt.label}</span>
                     ))}
                   </div>
                 </div>
@@ -1641,16 +1645,16 @@ export default function App() {
 
               {/* Step 3 — verify & deploy */}
               <div className="flex gap-3">
-                <div className="mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold bg-[#1f6feb]/15 text-[#1f6feb]">3</div>
+                <div className="mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-bold bg-[#1f6feb]/15 text-[#1f6feb]">3</div>
                 <div>
-                  <p className="font-mono text-[14px] text-[#e6edf3] mb-0.5">Verify, then Deploy</p>
-                  <p className="font-mono text-[13px] text-[#8b949e]">Use <span className="text-[#e6edf3]">Verify</span> to check if each device already has your certificate, then <span className="text-[#e6edf3]">Deploy</span> to push it.</p>
+                  <p className="font-mono text-[15px] text-[#e6edf3] mb-0.5">Verify, then Deploy</p>
+                  <p className="font-mono text-[14px] text-[#8b949e]">Use <span className="text-[#e6edf3]">Verify</span> to check if each device already has your certificate, then <span className="text-[#e6edf3]">Deploy</span> to push it.</p>
                 </div>
               </div>
 
 
               <button onClick={() => { setEditingDevice(undefined); setShowModal(true); }}
-                className="self-start inline-flex items-center gap-2 px-4 py-2 rounded border border-[#1f6feb]/40 bg-[#1f6feb]/10 font-mono text-[15px] text-[#58a6ff] hover:bg-[#1f6feb]/20 transition-colors">
+                className="self-start inline-flex items-center gap-2 px-4 py-2 rounded border border-[#1f6feb]/40 bg-[#1f6feb]/10 font-mono text-[16px] text-[#58a6ff] hover:bg-[#1f6feb]/20 transition-colors">
                 <Plus size={13} /> Add your first device
               </button>
             </div>
@@ -1668,7 +1672,7 @@ export default function App() {
               <button onClick={() => { setEditingDevice(undefined); setShowModal(true); }}
                 className="rounded border border-dashed border-[#21262d] p-4 flex flex-col items-center justify-center gap-2 text-[#30363d] hover:text-[#8b949e] hover:border-[#30363d] transition-colors min-h-[160px]">
                 <Plus size={22} />
-                <span className="font-mono text-[14px]">Add Device</span>
+                <span className="font-mono text-[15px]">Add Device</span>
               </button>
             </div>
           )}
@@ -1679,10 +1683,10 @@ export default function App() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Terminal size={14} className="text-[#8b949e]" />
-              <span className="font-mono text-[13px] uppercase tracking-[0.15em] text-[#8b949e]">Event Log</span>
+              <span className="font-mono text-[14px] uppercase tracking-[0.15em] text-[#8b949e]">Event Log</span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-[14px] text-[#484f58]">{logs.length} entries</span>
+              <span className="font-mono text-[15px] text-[#484f58]">{logs.length} entries</span>
               <button
                 onClick={() => {
                   const maxId = logs.reduce((m, l) => Math.max(m, l.id), 0);
@@ -1695,21 +1699,21 @@ export default function App() {
                     device: null,
                   }]);
                 }}
-                className="font-mono text-[14px] text-[#30363d] hover:text-[#8b949e] transition-colors"
+                className="font-mono text-[15px] text-[#30363d] hover:text-[#8b949e] transition-colors"
               >clear</button>
             </div>
           </div>
           <div className="overflow-y-auto space-y-px" style={{ maxHeight: "320px", scrollbarWidth: "thin", scrollbarColor: "#30363d transparent" }}>
             {logs.length === 0 ? (
-              <p className="text-[14px] text-[#30363d] font-mono py-2">Waiting for events…</p>
+              <p className="text-[15px] text-[#30363d] font-mono py-2">Waiting for events…</p>
             ) : logs.map(entry => (
               <div key={entry.id} className="flex gap-3 py-1.5 border-b border-[#21262d]/60 last:border-0">
-                <span className="font-mono text-[13px] text-[#484f58] shrink-0 pt-px whitespace-nowrap">{formatLocalTime(entry.ts)}</span>
-                <span className={`font-mono text-[13px] uppercase w-14 shrink-0 pt-px ${logLevelColor(entry.level)}`}>{entry.level}</span>
+                <span className="font-mono text-[14px] text-[#484f58] shrink-0 pt-px whitespace-nowrap">{formatLocalTime(entry.ts)}</span>
+                <span className={`font-mono text-[14px] uppercase w-14 shrink-0 pt-px ${logLevelColor(entry.level)}`}>{entry.level}</span>
                 {entry.device && (
-                  <span className="font-mono text-[13px] text-[#8b949e] shrink-0 pt-px whitespace-nowrap">[{entry.device}]</span>
+                  <span className="font-mono text-[14px] text-[#8b949e] shrink-0 pt-px whitespace-nowrap">[{entry.device}]</span>
                 )}
-                <span className="text-[15px] text-[#c9d1d9] leading-5">{entry.msg}</span>
+                <span className="text-[16px] text-[#c9d1d9] leading-5">{entry.msg}</span>
               </div>
             ))}
           </div>

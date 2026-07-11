@@ -1,0 +1,52 @@
+# Local GitLab CI mirror of .github/workflows/build.yaml — for testing pushes
+# without hitting the real GitHub repo every time. Must live at the repo root
+# (GitLab's default lookup path, same rule that bit us with the GitHub Actions
+# workflow needing to be at the true repo root, not nested in certfleet/).
+#
+# Assumes a Docker-executor runner with docker-in-docker (the `services:
+# docker:dind` block below) — if the runner ends up shell-executor instead
+# (Docker/buildx already on the host), delete the `services:`/`DOCKER_HOST`/
+# `DOCKER_TLS_CERTDIR` lines and everything else here works unchanged, since
+# it just calls `docker` directly either way.
+#
+# Pushes to GitLab's built-in Container Registry — CI_REGISTRY / CI_REGISTRY_IMAGE
+# / CI_REGISTRY_USER / CI_REGISTRY_PASSWORD are auto-provided by GitLab for any
+# project with the Container Registry enabled, no manual secret needed (same
+# role GITHUB_TOKEN plays in the GitHub workflow).
+#
+# amd64 only, intentionally — this is for fast local iteration, not production
+# multi-arch images. No QEMU/buildx needed as a result.
+
+stages:
+  - build
+
+build-image:
+  stage: build
+  image: docker:26
+  services:
+    - docker:26-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - certfleet/**/*
+  before_script:
+    - apk add --no-cache nodejs npm
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - cd certfleet/frontend
+    - npm ci
+    - npm run build
+    - cd ../..
+    - VERSION=$(grep '^version:' certfleet/config.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
+    - echo "Building version $VERSION"
+    - >
+      docker build
+      --build-arg BUILD_FROM=python:3.12-alpine
+      -t "$CI_REGISTRY_IMAGE:$VERSION"
+      -t "$CI_REGISTRY_IMAGE:latest"
+      ./certfleet
+    - docker push "$CI_REGISTRY_IMAGE:$VERSION"
+    - docker push "$CI_REGISTRY_IMAGE:latest"

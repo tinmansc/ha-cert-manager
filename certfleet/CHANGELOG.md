@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.2] — 2026-07-11
+
+### Added
+- **Private key / certificate pairing validation** (`cert_reader.py`) — `read_local_cert()` previously only checked the key file *exists*, never that it's a valid key or that it actually matches the certificate. A corrupted key, or a key left over from a different certificate, would have shown full "Certificate detected" success and only failed later as a cryptic per-device error. Now validated up front with a clear message, live-tested against both a mismatched pair and a corrupted key file before shipping.
+- Local GitLab CI mirror (`.gitlab-ci.yml`) for test-pushing before hitting the real GitHub repo — see `RELEASE_CHECKLIST.md`'s new "4.5. Local GitLab test push" section.
+
+### Fixed
+- **"Getting Started" panel hardcoded `/ssl/fullchain.pem`** in its "no cert found" message instead of reading the actual configured cert path — would have shown the wrong path if you ever customized it away from the default. Now reads the real `certPath`.
+- Reworded the staging-cert advisory (auto-deploy off case) for clarity: "auto-deploy is temporarily disabled" instead of "nothing will auto-deploy while auto-deploy stays off."
+
+### Changed
+- **Increased font sizes app-wide** — every `text-[Npx]` utility shifted up one step (11→12 through 17→18) to improve legibility while preserving the existing size hierarchy.
+- **Header now uses the real CertFleet ShieldCheck logo** instead of a generic outline icon, and moved into the breadcrumb itself: "Let's Encrypt → CertFleet → All Devices."
+
+---
+
 ## [1.3.1] — 2026-07-10 — "the vibe coding apocalypse where Dave realized he should ask more questions"
 
 ### Added

@@ -4,6 +4,26 @@ Run through this before every version bump and push to main.
 
 ---
 
+## 0. Deferred follow-ups — check this first, every time this file is opened
+
+Self-reminders for things that aren't due yet but shouldn't be forgotten.
+Anything below with a **Check after** date on or before today's date should
+be raised with the user — a quick status mention, or actually digging in
+first, whichever fits the moment — then either resolved (move to Common
+mistakes / delete the entry) or given a new **Check after** date.
+
+- [ ] **Check after: 2026-09-01** — TrueNAS's own web UI warned (2026-07-06)
+      that its REST API (`/api/v2.0/...` — what `devices/truenas.py` and its
+      key-expiry check are entirely built on) is deprecated and will be
+      removed in TrueNAS version 26.04, replaced by JSON-RPC 2.0 over
+      WebSocket. Not urgent yet — REST still works and 26.04 isn't out. When
+      revisited: check whether 26.04 has shipped or has a date, and if so,
+      verify the new JSON-RPC/WebSocket API hands-on against a real TrueNAS
+      box (auth model and call shape are both different) before writing any
+      migration code — same discipline as everything else in this project.
+
+---
+
 ## 1. Code changes complete
 - [ ] All intended changes committed locally
 - [ ] `run.sh` uses `#!/bin/sh` (NOT `#!/usr/bin/with-contenv bashio` — that requires HA base images)
@@ -28,6 +48,33 @@ Run through this before every version bump and push to main.
 ## 4. Frontend built (if frontend changed)
 - [ ] `cd frontend && npm run build` completes without errors
 - [ ] `frontend/dist/` is up to date (CI rebuilds it, but verify locally if you changed React code)
+
+## 4.5. Local GitLab test push (optional pre-flight, before hitting real GitHub)
+
+Set up 2026-07-10 so we're not pushing to the real repo repeatedly while
+iterating. `gitlab.daveclark.email` mirrors the GitHub CI pipeline via
+`.gitlab-ci.yml` at the true repo root (same root-only rule as GitHub Actions —
+see Common mistakes below). amd64-only image, pushed to GitLab's own
+Container Registry — this is for validating the build itself, not a
+substitute for the real multi-arch GHCR image.
+
+- [ ] `git push gitlab main` (remote already configured — `git remote -v` should
+      show both `origin` and `gitlab`)
+- [ ] Check GitLab CI/CD → Pipelines — job should go green
+- [ ] Once it's green, push the same commit(s) to `origin` for the real pipeline
+
+**One-time setup, done once GitLab is reachable (not yet completed as of this
+writing):**
+- [ ] Add the dedicated SSH public key (`~/.ssh/gitlab_daveclark.pub`) to the
+      GitLab user's SSH keys — the matching private key + an `ssh config`
+      entry for `gitlab.daveclark.email` are already in place locally
+- [ ] Create the `tinmansc/CertFleet` project in GitLab (empty, no README —
+      we're pushing existing history)
+- [ ] Confirm Container Registry is enabled for that project (usually on by
+      default for self-managed GitLab CE, but instance-wide settings can
+      disable it)
+- [ ] `ssh -T git@gitlab.daveclark.email` once to confirm auth and accept
+      the host key
 
 ## 5. Push to GitHub
 - [ ] `git status` — no unintended files staged
@@ -147,4 +194,5 @@ kind that quietly destroys trust rather than throwing an obvious error.
 > - The first version of the cert-coverage check (1.2.0) only read DNS-name SANs off a device's live certificate, missing IP-address SANs entirely — would have produced a false "not covered" warning on any device configured by IP whose self-signed cert includes that same IP as a SAN, which is a common pattern (caught by testing against the real Proxmox box, which does exactly this).
 > - `TYPE_FIELDS.hubitat` in `App.tsx` asked for an "API key" — but `hubitat.py` has only ever authenticated with username/password against the hub's web login. Any Hubitat device added through the GUI silently got empty username/password and a never-used API key field; nothing surfaced an error, it just quietly authenticated with blank credentials. Caught by the user noticing the Add Device form didn't match what they remembered configuring. Fixed by correcting `TYPE_FIELDS` to match the real backend, verified live in browser afterward. Lesson: when a device's auth mechanism is ever changed, check BOTH sides — it's easy for one to drift without any error, since empty-string credentials don't throw, they just fail (or worse, quietly no-op) downstream.
 > - `/api/events`'s SSE endpoint replays the entire `_log_buffer` on every new connection — which is correct and necessary for a client that just opened the page, but means the browser's automatic `EventSource` reconnect (fires a few seconds after any network hiccup) silently replays history that a user had just clicked "clear" on, since clear only ever touched local React state. Fixed by tracking a `clearedBeforeId` boundary client-side and filtering replayed/new entries against it, plus dropping a real "Event log cleared" marker into the log so the boundary is visible.
-> - **Auto-deploy-on-renewal and the "certificate unreadable" HA notification both only ever ran from a `setInterval` inside `App.tsx`'s React component** — meaning both silently did nothing at all on any CertFleet instance where nobody had the dashboard open in a browser. Found while designing staging/test-cert detection: a staging cert issued on an unattended system with Auto-deploy enabled would have needed someone watching a browser tab for the "don't push this to real devices" safety logic to even run in the first place. Not yet fixed as of 1.3.0 — the fix is to move renewal-detection and its consequences (auto-deploy, notifications) into the same server-side hook `_note_cert_if_changed()` (`main.py`, added in 1.3.0 for logging) already established, so they fire on every backend poll tick regardless of whether a browser is open. See the new "Unattended operation actually runs unattended" standing check above.
+> - **Auto-deploy-on-renewal and the "certificate unreadable" HA notification both only ever ran from a `setInterval` inside `App.tsx`'s React component** — meaning both silently did nothing at all on any CertFleet instance where nobody had the dashboard open in a browser. Found while designing staging/test-cert detection: a staging cert issued on an unattended system with Auto-deploy enabled would have needed someone watching a browser tab for the "don't push this to real devices" safety logic to even run in the first place. Fixed in 1.3.1 — moved into a real backend poll loop (`_poll_loop`/`_poll_tick`, `main.py`), which now also drives staging-cert detection. See the "Unattended operation actually runs unattended" standing check above.
+> - `read_local_cert()` fully validated the certificate (exists, non-empty, valid PEM) but only checked the private key file *exists* — never that it's actually a valid key, and never that it matches the certificate at all. A corrupted key file or a leftover key from a different certificate would have shown full "Certificate detected" success, only failing later as a cryptic per-device TLS/API error disconnected from the real cause. Fixed by adding `_load_private_key()` (validates PEM parseability) and `_keys_match()` (compares DER-encoded SubjectPublicKeyInfo bytes, works across RSA/EC/Ed25519 uniformly) to `cert_reader.py`, both live-tested against a real mismatched pair and a corrupted key file before shipping.

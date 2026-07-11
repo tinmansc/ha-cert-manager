@@ -11,6 +11,9 @@ from pathlib import Path
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.serialization import (
+    Encoding, PublicFormat, load_pem_private_key,
+)
 
 
 DEFAULT_CERT_PATH = "/ssl/fullchain.pem"
@@ -62,6 +65,28 @@ def _load_chain(path: Path) -> list[x509.Certificate]:
 
 def _load_leaf(path: Path) -> x509.Certificate:
     return _load_chain(path)[0]
+
+
+def _load_private_key(path: Path):
+    if not path.is_file():
+        raise ValueError(f"{path} exists but is not a file")
+    data = path.read_bytes()
+    if not data.strip():
+        raise ValueError(f"Private key file is empty: {path}")
+    try:
+        return load_pem_private_key(data, password=None)
+    except Exception as exc:
+        raise ValueError(
+            f"Private key file at {path} is not a valid, unencrypted PEM private key ({exc})"
+        ) from exc
+
+
+def _keys_match(cert: x509.Certificate, private_key) -> bool:
+    """Compares DER-encoded SubjectPublicKeyInfo bytes rather than
+    RSA/EC-specific public numbers so this works uniformly across every key
+    type (RSA, EC, Ed25519, ...) without a type-specific branch per algorithm."""
+    fmt = dict(encoding=Encoding.DER, format=PublicFormat.SubjectPublicKeyInfo)
+    return private_key.public_key().public_bytes(**fmt) == cert.public_key().public_bytes(**fmt)
 
 
 def _fingerprint(cert: x509.Certificate) -> str:
@@ -174,6 +199,14 @@ def read_local_cert(
         raise FileNotFoundError(
             f"Private key file not found: {kp}\n"
             f"Update the key path in Settings."
+        )
+
+    private_key = _load_private_key(kp)
+    if not _keys_match(cert, private_key):
+        raise ValueError(
+            f"The private key at {kp} does not match the certificate at {cp} — "
+            f"check both paths in Settings. This can happen if the key path still "
+            f"points at an old key after the cert path was updated (or vice versa)."
         )
 
     now = datetime.now(timezone.utc)
