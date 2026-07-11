@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.3] — 2026-07-11
+
+### Fixed
+- **`ensure_key()` fired a false "unrecoverable data loss" error** any time `config.json` existed and `master.key` didn't — including the completely normal case of a legacy *plaintext* config being encrypted for the very first time (part of `load_config()`'s own migration path). Hit for real on a production instance's first boot with an old pre-1.0.10 plaintext config lying around: the scary error logged, but devices were never actually at risk. Fixed by checking whether `config.json` is genuinely encrypted before alarming — verified against both a real false-positive (now silent) and a real lost-key case (still alarms correctly).
+
+### Changed
+- Breadcrumb arrows ("Let's Encrypt → CertFleet → All Devices") now use the app's green accent color instead of muted gray.
+
+---
+
 ## [1.3.2] — 2026-07-11
 
 ### Added

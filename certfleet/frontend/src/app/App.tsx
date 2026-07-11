@@ -1378,12 +1378,12 @@ export default function App() {
         <div className="max-w-[1600px] mx-auto px-6 h-12 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline font-mono text-[15px] text-[#8b949e]">Let's Encrypt</span>
-            <span className="hidden sm:inline text-[#30363d] text-lg">→</span>
+            <span className="hidden sm:inline text-[#39d353] text-lg">→</span>
             <div className="flex items-center gap-2">
               <img src="./favicon-64.png" alt="" className="w-[18px] h-[18px]" />
               <span className="font-mono text-[17px] font-semibold text-[#e6edf3]">CertFleet</span>
             </div>
-            <span className="hidden sm:inline text-[#30363d] text-lg">→</span>
+            <span className="hidden sm:inline text-[#39d353] text-lg">→</span>
             <span className="hidden sm:inline font-mono text-[15px] text-[#8b949e]">All Devices</span>
           </div>
           <div className="flex items-center gap-4">

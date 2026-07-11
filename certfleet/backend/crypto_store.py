@@ -158,16 +158,24 @@ def _read_key_file() -> bytes:
 def ensure_key(logger: LogFn = None) -> bytes:
     """Return the master key, generating one on first run.
 
-    If config.json already exists at this point, generating a new key
-    silently would leave that file permanently unreadable — it was
-    encrypted under whatever key used to be here, which is now gone.
-    That's still the only thing we CAN do (there's no key to recover),
-    but it should never happen quietly: log it loudly so "why are my
-    devices gone" has an answer in the event log instead of a mystery.
+    If an ENCRYPTED config.json already exists at this point, generating a
+    new key silently would leave that file permanently unreadable — it was
+    encrypted under whatever key used to be here, which is now gone. That's
+    still the only thing we CAN do (there's no key to recover), but it
+    should never happen quietly: log it loudly so "why are my devices gone"
+    has an answer in the event log instead of a mystery.
+
+    A config.json that's still plaintext (starts with '{') is NOT that
+    situation — it's the normal legacy-migration path (load_config() is
+    about to encrypt it for the first time via save_config()) and doesn't
+    mean anything was lost. Checking the byte content, not just existence,
+    avoids alarming users with a false "unrecoverable data loss" error on
+    every legacy plaintext config's first-ever encryption.
     """
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not KEY_FILE.exists():
-        if CONFIG_FILE.exists() and logger:
+        is_genuinely_encrypted = CONFIG_FILE.exists() and CONFIG_FILE.read_bytes()[:1] != b"{"
+        if is_genuinely_encrypted and logger:
             logger("error", "Generating a new encryption key, but an existing config.json was found — "
                              "it was encrypted under a different key that is now missing and cannot be "
                              "recovered. If you have a backup of the old master.key, restore it via "
