@@ -35,18 +35,19 @@ build-image:
   before_script:
     - apk add --no-cache nodejs npm
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-  script:
-    - cd certfleet/frontend
-    - npm ci
-    - npm run build
-    - cd ../..
-    - VERSION=$(grep '^version:' certfleet/config.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
-    - echo "Building version $VERSION"
-    - >
-      docker build
-      --build-arg BUILD_FROM=python:3.12-alpine
-      -t "$CI_REGISTRY_IMAGE:$VERSION"
-      -t "$CI_REGISTRY_IMAGE:latest"
-      ./certfleet
-    - docker push "$CI_REGISTRY_IMAGE:$VERSION"
-    - docker push "$CI_REGISTRY_IMAGE:latest"
+  # A literal block (not a YAML list of individually-quoted strings) —
+  # deliberately, so shell characters like the `*` in the sed regex below
+  # never get parsed as YAML syntax (a bare `*` in an unquoted flow scalar
+  # is YAML's alias-reference marker, which broke the original list form
+  # with "did not find expected alphabetic or numeric character while
+  # scanning an alias" — confirmed against a real GitLab pipeline run).
+  script: |
+    cd certfleet/frontend
+    npm ci
+    npm run build
+    cd ../..
+    VERSION=$(grep '^version:' certfleet/config.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
+    echo "Building version $VERSION"
+    docker build --build-arg BUILD_FROM=python:3.12-alpine -t "$CI_REGISTRY_IMAGE:$VERSION" -t "$CI_REGISTRY_IMAGE:latest" ./certfleet
+    docker push "$CI_REGISTRY_IMAGE:$VERSION"
+    docker push "$CI_REGISTRY_IMAGE:latest"
