@@ -157,6 +157,32 @@ kind that quietly destroys trust rather than throwing an obvious error.
       username/password) — nothing errored, it just quietly authenticated
       with empty credentials. Check this any time a device type's fields
       change on either side.
+- [ ] **Trailing whitespace on every user-input field is handled.** Any time
+      you add or modify a field the user types/pastes into (hostname, IP, URL,
+      path, port, username, API key, site/node/jail name, SSH key, password,
+      encryption key — anything the backend then consumes), verify trailing/
+      leading whitespace can't silently break it. Clipboard copy/paste very
+      commonly appends a trailing space, and it produces cryptic, hard-to-
+      diagnose failures downstream (a real example: pasting a git clone URL
+      with a trailing space into HA's "Add repository" box threw a long
+      inscrutable error — the space was the whole problem). Rules:
+      - **Non-secret fields** (hosts, URLs, paths, ports, usernames, IDs, API
+        keys, jail/policy/domain names, etc.): silently `.strip()` the value we
+        take in — trim it for the user, no notification needed. This is the
+        default for everything that isn't a password-class secret.
+      - **Password-class secrets** (device passwords, `p12_password`, the
+        encryption key, XTD CLI password, anything we deliberately don't
+        mutate): do **not** silently trim — a space could genuinely be part of
+        the secret, and altering it is worse than rejecting it. Instead reject
+        the entry and tell the user it can't start/end with a space and to
+        re-enter it. Crucially, **do not log the value or even the fact** that a
+        secret had a trailing space (an event-log line like "password had a
+        trailing space" leaks information about the secret) — surface the
+        rejection only in the UI, at the field, and log nothing about it.
+      Check both the frontend (trim on the non-secret inputs, reject-with-
+      message on secret ones) and any backend path that accepts these values
+      directly (e.g. `/api/verify-host`, config save), so a value that reaches
+      the backend by some route other than the form is still covered.
 - [ ] **Event log survives a clear across an SSE reconnect**: `/api/events`
       replays the full `_log_buffer` on every new connection, and the browser
       reconnects `EventSource` on its own after any blip — a few seconds

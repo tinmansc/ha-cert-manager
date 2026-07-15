@@ -9,7 +9,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DeviceType = "truenas" | "brother" | "hubitat" | "comware" | "omada" | "pfsense" | "proxmox" | "netdata";
+type DeviceType = "truenas" | "brother" | "hubitat" | "comware" | "omada" | "pfsense" | "proxmox" | "netdata" | "wican" | "hp";
 
 interface LocalCert {
   domain: string; issuer: string; not_before: string; not_after: string;
@@ -38,6 +38,7 @@ interface DeviceConfigEntry {
   p12_password?: string; delete_old_certs?: boolean;
   ssh_host?: string; ssh_port?: number; ssh_username?: string;
   ssh_private_key?: string; jail_name?: string;
+  wican_cert_set?: string;
 }
 
 interface AppConfig {
@@ -65,6 +66,8 @@ const DEVICE_TYPES: { value: DeviceType; label: string; icon: string; defaultPor
   { value: "brother",  label: "Brother MFC Printer",       icon: "🖨️", defaultPort: 443, namePlaceholder: "My Brother Printer"},
   { value: "proxmox",  label: "Proxmox VE",                icon: "🖥️", defaultPort: 8006, namePlaceholder: "My Proxmox Node"   },
   { value: "netdata",  label: "Netdata (TrueNAS jail)",     icon: "📊", defaultPort: 19999, namePlaceholder: "My Netdata"       },
+  { value: "wican",    label: "WiCAN Pro (OBD2 · MQTT CA)",  icon: "🚗", defaultPort: 80,   namePlaceholder: "My WiCAN"         },
+  { value: "hp",       label: "HP Printer (EWS)",           icon: "🖨️", defaultPort: 443,  namePlaceholder: "My HP Printer"    },
 ];
 const DEVICE_TYPE_MAP = Object.fromEntries(DEVICE_TYPES.map(d => [d.value, d]));
 
@@ -77,6 +80,8 @@ const TYPE_FIELDS: Record<DeviceType, string[]> = {
   brother:  ["password"],
   proxmox:  ["username", "api_key", "site_id", "port", "proxmox_allow_upload"],
   netdata:  ["port", "jail_name", "ssh_host", "ssh_port", "ssh_username", "ssh_private_key"],
+  wican:    ["wican_cert_set", "port"],
+  hp:       ["username", "password", "port", "verify_tls"],
 };
 
 const BG_PRESETS = [
@@ -220,6 +225,28 @@ function validateHost(raw: string): string | null {
     if (octets.length !== 4) return "Invalid IPv4 address (need 4 octets)";
   }
   return null;
+}
+
+// Trailing/leading whitespace on pasted input is a common, cryptic failure
+// (clipboard copies routinely append a space). We handle it two ways:
+//  - Non-secret fields: silently trimmed on save — safe to fix for the user.
+//  - Password-class secrets: never silently mutated (a space might be part of
+//    the secret, and altering a credential behind the user's back is worse
+//    than rejecting it). Rejected with a message; NOTHING about it is logged,
+//    since even "a secret had a trailing space" leaks information.
+// See RELEASE_CHECKLIST.md §10 "Trailing whitespace on every user-input field".
+const TRIM_ON_SAVE_FIELDS: (keyof DeviceConfigEntry)[] = [
+  "name", "host", "username", "site_id", "pki_domain", "ssl_policy",
+  "startup_config_path", "omadac_id", "ssh_host", "ssh_username", "jail_name",
+  "wican_cert_set",
+];
+// Masked passphrase-style secrets — reject leading/trailing space, don't trim.
+const REJECT_SPACE_SECRET_FIELDS: (keyof DeviceConfigEntry)[] = [
+  "password", "api_key", "p12_password",
+];
+
+function hasEdgeSpace(v: unknown): boolean {
+  return typeof v === "string" && v.length > 0 && v !== v.trim();
 }
 
 function certDayColor(d: number) {
@@ -409,8 +436,20 @@ function EncryptionKeySection() {
 
   const handleRestoreSubmit = () => {
     if (!pasteKey) return;
+    // Encryption key is a base64 Fernet key — an edge space is always an
+    // accidental paste artifact and would silently fail to decrypt. Reject it
+    // rather than trimming a secret; don't log anything about it.
+    if (pasteKey !== pasteKey.trim()) {
+      setMsg({ ok: false, text: "The key can't start or end with a space — re-paste it (a trailing space is often an accidental copy/paste)." });
+      return;
+    }
     if (pasteKey !== pasteKeyConfirm) { setMsg({ ok: false, text: "The two entries don't match" }); return; }
     if (needsForce) {
+      // Exact match on purpose — this is a deliberate friction gate for an
+      // irreversible, data-destroying action, NOT a data field. Unlike a
+      // hostname/URL/key, a whitespace mismatch here fails safe and visibly
+      // (nothing happens, the user sees their input vs the required phrase),
+      // so we do NOT trim it — the friction is the point.
       if (noRecoveryText !== "NO RECOVERY") return;
       submitPastedKey(true);
     } else {
@@ -736,6 +775,7 @@ const EMPTY_DEVICE: DeviceConfigEntry = {
   verify_tls: true, pfsense_allow_upload: false, proxmox_allow_upload: false, omadac_id: "", p12_password: "",
   delete_old_certs: true,
   ssh_host: "", ssh_port: 22, ssh_username: "", ssh_private_key: "", jail_name: "",
+  wican_cert_set: "",
 };
 
 function DeviceModal({
@@ -751,11 +791,22 @@ function DeviceModal({
   const [connecting, setConnecting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [hostError, setHostError]   = useState<string | null>(null);
+  const [saveError, setSaveError]   = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const isNew = !initial;
 
-  const set = (key: keyof DeviceConfigEntry, val: unknown) =>
+  // Human label for a field, for the reject-on-space message. Falls back to
+  // the key itself for anything not spelled out here.
+  const fieldLabel = (f: keyof DeviceConfigEntry): string => ({
+    password: "Password", api_key: dev.type === "comware" ? "XTD CLI password"
+      : dev.type === "proxmox" ? "Token secret" : "API key",
+    p12_password: "PKCS#12 password",
+  } as Partial<Record<keyof DeviceConfigEntry, string>>)[f] ?? String(f);
+
+  const set = (key: keyof DeviceConfigEntry, val: unknown) => {
     setDev(prev => ({ ...prev, [key]: val }));
+    if (saveError) setSaveError(null);
+  };
 
   const fields = TYPE_FIELDS[dev.type] ?? [];
 
@@ -780,11 +831,36 @@ function DeviceModal({
 
   const handleSave = () => {
     if (!dev.name.trim()) return;
-    const err = validateHost(dev.host);
+
+    // Reject (never silently mutate) passphrase-style secrets that start/end
+    // with a space. Only fields this device type actually collects are checked.
+    // Deliberately no logging of any kind here — see the constant's comment.
+    for (const f of REJECT_SPACE_SECRET_FIELDS) {
+      if (!fields.includes(f as string)) continue;
+      if (hasEdgeSpace(dev[f])) {
+        setSaveError(`The ${fieldLabel(f)} can't start or end with a space — `
+          + `re-enter it (a trailing space is often an accidental copy/paste).`);
+        return;
+      }
+    }
+    setSaveError(null);
+
+    const err = validateHost(dev.host.trim());
     if (err) { setHostError(err); return; }
     setHostError(null);
+
+    // Silently trim non-secret fields. The SSH private key is a secret but a
+    // PEM blob — its outer whitespace/newlines aren't part of the key material,
+    // so trimming those is safe and prevents a stray edge space from breaking
+    // parsing (unlike a passphrase, where a space could be intentional).
     const saved = { ...dev };
-    if (!saved.id) saved.id = slugify(dev.name) || String(Date.now());
+    for (const f of TRIM_ON_SAVE_FIELDS) {
+      const v = saved[f];
+      if (typeof v === "string") (saved[f] as string) = v.trim();
+    }
+    if (typeof saved.ssh_private_key === "string") saved.ssh_private_key = saved.ssh_private_key.trim();
+
+    if (!saved.id) saved.id = slugify(saved.name) || String(Date.now());
     onSave(saved);
   };
 
@@ -864,10 +940,16 @@ function DeviceModal({
                   Full token ID from Datacenter → Permissions → API Tokens (user@realm!tokenname).
                 </p>
               )}
+              {dev.type === "hp" && (
+                <p className="font-mono text-[12px] text-[#484f58] mt-1">
+                  The EWS admin username (usually <span className="text-[#8b949e]">admin</span>). HP gates the
+                  cert API behind an admin password — one must be set on the printer's EWS.
+                </p>
+              )}
             </FieldRow>
           )}
           {fields.includes("password") && (
-            <FieldRow label="Password">
+            <FieldRow label={dev.type === "hp" ? "EWS admin password" : "Password"}>
               <TextInput value={dev.password ?? ""} onChange={v => set("password", v)} password />
             </FieldRow>
           )}
@@ -906,6 +988,20 @@ function DeviceModal({
               <TextInput value={dev.omadac_id ?? ""} onChange={v => set("omadac_id", v)} mono
                 placeholder="32-char hex — auto-discovered if blank" />
             </FieldRow>
+          )}
+          {fields.includes("wican_cert_set") && (
+            <>
+              <p className="font-mono text-[12px] text-[#484f58] -mt-1">
+                The WiCAN has no HTTPS server — this pushes your Let's Encrypt fullchain as the
+                <span className="text-[#8b949e]"> CA of a cert set</span> so the WiCAN trusts an MQTT
+                broker using that cert. Afterward, point the WiCAN's MQTT config at this set name
+                (mqtt_cert_set) with TLS enabled.
+              </p>
+              <FieldRow label="Cert set name">
+                <TextInput value={dev.wican_cert_set ?? ""} onChange={v => set("wican_cert_set", v)} mono
+                  placeholder="certfleet" />
+              </FieldRow>
+            </>
           )}
           {fields.includes("jail_name") && (
             <>
@@ -1021,6 +1117,12 @@ function DeviceModal({
         </div>
 
         {/* Footer */}
+        {saveError && (
+          <div className="flex items-start gap-1.5 px-5 pt-3 -mb-1">
+            <AlertCircle size={13} className="text-[#f85149] mt-0.5 shrink-0" />
+            <span className="font-mono text-[14px] text-[#f85149]">{saveError}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between px-5 py-4 border-t border-[#21262d]">
           {/* Delete */}
           <div>

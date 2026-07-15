@@ -34,12 +34,14 @@ On first launch the dashboard will be empty. Click **Add Device** and fill in th
 
 - **TrueNAS** — TrueNAS CORE and SCALE via REST API
 - **Brother MFC** — Brother MFC-J4335DW (and similar models with web-based cert upload)
+- **HP printer** — HP printers whose Embedded Web Server supports PKCS#12 certificate import (tested on a DeskJet 2752e). **An EWS admin password must be set on the printer** — HP hides the certificate API until one is, so CertFleet authenticates as `admin` with that password.
 - **Hubitat** — Hubitat Elevation C-7 via local API
 - **HPE Comware 7** — HPE 1950 series switches via SSH (tested on 1950; likely works on any Comware 7 switch)
 - **TP-Link Omada** — OC200 / OC300 controllers
 - **pfSense** — pfSense firewalls via REST API
 - **Proxmox VE** — Proxmox nodes via API token
 - **Netdata** — Netdata dashboards running in a FreeBSD jail on TrueNAS, updated over SSH (`iocage exec` into the jail, cert files written into `ssl/`, `netdata` service restarted). Requires SSH access to the TrueNAS host with passwordless sudo for `iocage`, and a private key pasted into the device editor.
+- **WiCAN Pro (OBD2)** — the MeatPi WiCAN Pro has no HTTPS server of its own, so instead of deploying a server cert, this uploads your Let's Encrypt fullchain as the **CA of a named cert set** in the WiCAN's certificate manager — letting the WiCAN trust an MQTT broker that uses that Let's Encrypt cert. After deploying, point the WiCAN's MQTT config at the cert set (with TLS enabled) for it to take effect.
 
 ## SSL certificate path
 

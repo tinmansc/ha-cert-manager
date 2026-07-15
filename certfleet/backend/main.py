@@ -32,6 +32,8 @@ import devices.omada as omada
 import devices.pfsense as pfsense
 import devices.proxmox as proxmox
 import devices.netdata as netdata
+import devices.wican as wican
+import devices.hp as hp
 
 
 # ── Event log (ring buffer, SSE) ──────────────────────────────────────────────
@@ -382,6 +384,14 @@ def get_config():
 
 @app.post("/api/config")
 def save_config(body: dict):
+    # Defensive trim of non-secret top-level path fields, so a value that
+    # arrives with stray edge whitespace by any route (not just the UI, which
+    # already trims these) can't silently break cert/key file reads. Device
+    # secrets inside `body["devices"]` are deliberately left untouched — see
+    # config.load_devices()'s `_t` note and RELEASE_CHECKLIST.md §10.
+    for _pf in ("cert_path", "key_path"):
+        if isinstance(body.get(_pf), str):
+            body[_pf] = body[_pf].strip()
     try:
         crypto_store.save_config(body)
     except Exception as e:
@@ -737,6 +747,13 @@ def _check_cert_coverage(dev: DeviceConfig, local) -> Optional[str]:
     if local is None:
         return None
 
+    # The WiCAN isn't given a server cert for its own hostname — the cert is
+    # pushed as a CA into its trust store so it can trust an MQTT broker. The
+    # "is this device's hostname covered by the new cert" check is meaningless
+    # (and misleading) here, so skip coverage entirely for it.
+    if dev.type == "wican":
+        return None
+
     new_names = set(local.sans) | {local.domain}
     hostname = strip_scheme(dev.host)
     port = dev.port or 443
@@ -777,6 +794,8 @@ _DEPLOYERS = {
     "pfsense": (pfsense.check, pfsense.deploy),
     "proxmox": (proxmox.check, proxmox.deploy),
     "netdata": (netdata.check, netdata.deploy),
+    "wican":   (wican.check,   wican.deploy),
+    "hp":      (hp.check,      hp.deploy),
 }
 
 
